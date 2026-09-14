@@ -6,11 +6,12 @@ and the conformance probe that checks them.
 | Path | What |
 |---|---|
 | `MMROIP-CORE-SPEC.md` | Core endpoint specification (rev 1.0) |
-| `src/mmroip/` | Python package: `Device`, discovery, display images. Standard library only |
+| `src/mmroip/` | Python package: `Device`, discovery, display images and partial updates. Standard library only |
 | `probe/mmroip_probe.py` | Core conformance suite C-1 … C-31 (§15) |
 | `probe/mmroip_lib.py` | Probe harness: results, profile hooks; transport comes from the package |
 | `probe/discovery_check.py` | What endpoints show on the network, and what happens across a boot (D-1 … D-11) |
 | `examples/send_image.py` | Show a picture, text or test pattern on a display endpoint |
+| `examples/clock.py` | An analog clock with a seconds dot on one or more displays, drawn without Pillow; fast-clock option (`--speed 4 --start 06:00`) |
 
 The first endpoint is the SSD1306 display in `../oled`.
 
@@ -40,6 +41,9 @@ dev.state()
 w, h = dev.image_size()
 dev.show_image(mmroip.image.text("Gleis 3", w, h))
 dev.show_image(mmroip.image.picture("logo.png", w, h), udp=True)
+dev.update_image(frame)                 # only the rectangles that changed since the last update_image
+dev.patch_image(crc, [(x, y, w, h, bytes)])   # rectangles on the image with checksum crc, by hand
+dev.tx_bytes                            # request bytes sent so far
 ```
 
 On a computer with several networks, SSDP searches and whois broadcasts leave through the default

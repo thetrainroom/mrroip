@@ -23,12 +23,15 @@ class Device:
         # on one host in order; pass seq_start to count from a fixed value instead.
         self.seq = int(time.time() * 1000) if seq_start is None else seq_start
         self.dfn = None
+        self.tx_bytes = 0           # request bytes sent (HTTP bodies and datagrams), for measuring traffic
+        self._image = None          # (image, crc32) last confirmed by update_image
 
     # -- HTTP ----------------------------------------------------------
     def req(self, path, body=None, method=None):
         """Returns (status, JSON body); HTTP errors are returned, not raised."""
         url = f"http://{self.ip}{path}"
         data = json.dumps(body).encode() if body is not None else None
+        self.tx_bytes += len(data or b"")
         m = method or ("POST" if data else "GET")
         r = urllib.request.Request(url, data=data, method=m,
                                    headers={"Content-Type": "application/json"})
@@ -67,6 +70,7 @@ class Device:
             kw.setdefault("seq", self.seq)
             kw.setdefault("ts", int(time.monotonic() * 1000))
             raw = json.dumps(kw).encode()
+        self.tx_bytes += len(raw)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.settimeout(self.timeout)
         try:
@@ -120,3 +124,40 @@ class Device:
         if udp:
             return self.control_udp(mode=mode, objects=objects)
         return self.control(mode=mode, objects=objects)
+
+    def patch_image(self, base_crc32, rects, mode="show", udp=False):
+        """Replace rectangles of the image on screen; rects = [(x, y, w, h, bytes)], each rectangle an image of its
+        own. Refused with details reason "stale_base" unless base_crc32 is the image on screen."""
+        objects = {"image": {"base_crc32": base_crc32, "rects": [
+            {"x": x, "y": y, "w": w, "h": h, "data": image.encode(d)} for x, y, w, h, d in rects]}}
+        if udp:
+            return self.control_udp(mode=mode, objects=objects)
+        return self.control(mode=mode, objects=objects)
+
+    def update_image(self, data, mode="show", udp=False):
+        """Show an image, sending only the rectangles that differ from the image this method showed last. Sends the
+        whole image the first time, when the display shows something else (stale_base), when it does not take
+        rectangles, or when they would not be smaller. Returns the control response, or None if nothing changed."""
+        w, h = self.image_size()
+        if self._image is not None:
+            old, crc = self._image
+            if old == data:
+                return None
+            obj = next((o for o in self.dfn.get("objects", []) if o.get("id") == "image"), {})
+            max_rects = obj.get("profile", {}).get("max_rects", 0)
+            rects = image.changed_rects(old, data, w, h, max_rects=max_rects) if max_rects else []
+            parts = [(x, y, rw, rh, image.crop(data, w, x, y, rw, rh)) for x, y, rw, rh in rects]
+            if parts and sum(len(p[4]) for p in parts) < len(data):
+                reply = self.patch_image(crc, parts, mode, udp)
+                reasons = {d.get("reason") for d in reply.get("details", [])}
+                if reply.get("accepted") or "stale_base" not in reasons:
+                    self._remember(data, reply)
+                    return reply
+        reply = self.show_image(data, mode, udp)
+        self._remember(data, reply)
+        return reply
+
+    def _remember(self, data, reply):
+        shown = ((reply.get("state") or {}).get("profile") or {}).get("image") or {}
+        ok = reply.get("accepted") and shown.get("crc32") == image.crc32(data)
+        self._image = (data, shown["crc32"]) if ok else None

@@ -5,6 +5,7 @@ endpoint (../../oled/MMROIP-PLAN.md §2). mmroip_probe.py loads it when /definit
     python3.12 mmroip_probe.py --host 192.168.10.164 --no-prompt --only C-16,C-21,C-24,P-1,P-2,P-3,P-4,P-5,P-6
 
 P-6 changes `panel` with persist, so the device restarts twice; it restores the original panel.
+P-8 … P-11 test partial updates (rectangles on top of the image on screen, guarded by base_crc32).
 """
 
 import time
@@ -174,4 +175,103 @@ def p07(d, ctx):
     return r.passed(f"{fault}: show refused with latched_fault; reset retried the display, fault now {still!r}")
 
 
-TESTS = [p01, p02, p03, p04, p05, p06, p07]
+RECT = (8, 8, 16, 8)                        # inside every panel, the smallest being 64x32
+SOLID = bytes([0xFF]) * (2 * 8)             # all lit: never equal to the checker pattern underneath
+
+
+def _show_checker(d):
+    w, h = _size(d)
+    data = image.pattern("checker", w, h)
+    reply = d.control(mode="show", objects={"image": image.encode(data)})
+    return data if reply.get("accepted") else None
+
+
+@test("P-8", "partial update replaces its rectangle")
+def p08(d, ctx):
+    r = Res("P-8", p08._name)
+    d.quiesce()
+    if _fault(d):
+        return r.skipped(f"the device reports fault {_fault(d)!r} (see P-7)")
+    base = _show_checker(d)
+    if base is None:
+        return r.failed("the full image underneath was rejected")
+    w, _ = _size(d)
+    bus_before = (d.pstate().get("image") or {}).get("bus_bytes")
+    reply = d.patch_image(image.crc32(base), [(*RECT, SOLID)])
+    if not reply.get("accepted"):
+        return r.failed(f"rejected: {reply.get('error')} {reply.get('details')}")
+    want, got = image.crc32(image.paste(base, w, *RECT, SOLID)), _crc_on_screen(d)
+    if got != want:
+        return r.failed(f"/state reports crc32 {got}, the patched image is {want}")
+    bus_after = (d.pstate().get("image") or {}).get("bus_bytes")
+    bus = f", {bus_after - bus_before} bytes on the display bus" if None not in (bus_before, bus_after) else ""
+    return r.passed(f"{RECT[2]}x{RECT[3]} at ({RECT[0]}, {RECT[1]}), crc32 {got}{bus}")
+
+
+@test("P-9", "partial update on the wrong image refused")
+def p09(d, ctx):
+    r = Res("P-9", p09._name)
+    d.quiesce()
+    if not _fault(d) and _show_checker(d) is None:
+        return r.failed("the full image underneath was rejected")
+    before = _crc_on_screen(d)
+    wrong = "00000000" if before != "00000000" else "11111111"
+    reply = d.patch_image(wrong, [(*RECT, SOLID)])
+    if reply.get("accepted") is not False or "stale_base" not in _reasons(reply):
+        return r.failed(f"accepted={reply.get('accepted')} details={reply.get('details')}")
+    return r.passed("stale_base, picture kept") if _crc_on_screen(d) == before \
+        else r.failed("a refused partial update changed the picture")
+
+
+@test("P-10", "a repeated partial update is harmless")
+def p10(d, ctx):
+    r = Res("P-10", p10._name)
+    d.quiesce()
+    if _fault(d):
+        return r.skipped(f"the device reports fault {_fault(d)!r} (see P-7)")
+    base = _show_checker(d)
+    if base is None:
+        return r.failed("the full image underneath was rejected")
+    first = d.patch_image(image.crc32(base), [(*RECT, SOLID)])
+    after = _crc_on_screen(d)
+    again = d.patch_image(image.crc32(base), [(*RECT, SOLID)])     # its base is outdated now, its content is not
+    if not first.get("accepted") or not again.get("accepted"):
+        return r.failed(f"first accepted={first.get('accepted')}, repeat accepted={again.get('accepted')} "
+                        f"{again.get('details')}")
+    return r.passed("accepted again, picture unchanged") if _crc_on_screen(d) == after \
+        else r.failed("the repeat changed the picture")
+
+
+@test("P-11", "invalid rectangles refused")
+def p11(d, ctx):
+    r = Res("P-11", p11._name)
+    d.quiesce()
+    w, h = _size(d)
+    before = _crc_on_screen(d)
+    base = before or "00000000"
+    cases = {
+        "out_of_bounds": [(w - 4, 0, 8, 8, bytes(8))],
+        "wrong_size": [(*RECT, SOLID[:-2])],
+        "too_many_rects": [(*RECT, SOLID)] * 9,
+        "invalid_base64": None,
+        "missing_base_crc32": None,
+    }
+    wrong = []
+    for reason, rects in cases.items():
+        if reason == "invalid_base64":
+            reply = d.control(mode="show", objects={"image": {"base_crc32": base, "rects": [
+                {"x": 8, "y": 8, "w": 16, "h": 8, "data": "!" * len(image.encode(SOLID))}]}})
+        elif reason == "missing_base_crc32":
+            reply = d.control(mode="show", objects={"image": {"rects": [
+                {"x": 8, "y": 8, "w": 16, "h": 8, "data": image.encode(SOLID)}]}})
+        else:
+            reply = d.patch_image(base, rects)
+        if reply.get("accepted") is not False or reason not in _reasons(reply):
+            wrong.append(f"{reason}: accepted={reply.get('accepted')} details={reply.get('details')}")
+    if wrong:
+        return r.failed("; ".join(wrong))
+    return r.passed(f"{len(cases)} reasons, picture kept") if _crc_on_screen(d) == before \
+        else r.failed("a refused partial update changed the picture")
+
+
+TESTS = [p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11]
