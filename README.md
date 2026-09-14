@@ -37,6 +37,11 @@ dev.show_image(mmroip.image.text("Gleis 3", w, h))
 dev.show_image(mmroip.image.picture("logo.png", w, h), udp=True)
 ```
 
+On a computer with several networks, SSDP searches and whois broadcasts leave through the default
+interface. `mmroip.ssdp_search(iface="192.168.4.2")` sends from another local address; setting
+`MMROIP_IFACE` does the same for code that does not pass it, such as the probe:
+`MMROIP_IFACE=192.168.4.2 python3.12 probe/mmroip_probe.py --host 192.168.4.1 --only C-1`.
+
 `seq` must grow per sender address (§9.5). `Device` counts from a millisecond timestamp, so several
 programs on one computer stay in order. The probe counts from 1000 because two of its tests set `seq`
 themselves; wait 5 seconds after other tools before running it, or its first messages count as replays.

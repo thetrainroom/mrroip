@@ -1,17 +1,27 @@
 """
 Finding MMRoIP endpoints (MMROIP-CORE-SPEC.md §6): SSDP, which is normative, and the whois probe, which is
 a diagnostic for networks that block multicast.
+
+On a computer with several networks, multicast and broadcast leave through the default interface. Pass
+`iface` (a local IPv4 address) to search from another one, or set MMROIP_IFACE for code you cannot change,
+such as the conformance probe.
 """
 
 import json
+import os
 import socket
 import time
 
 from . import protocol
 
 
-def ssdp_search(timeout=6.0, st=protocol.SSDP_ST):
+def _iface(iface):
+    return iface or os.environ.get("MMROIP_IFACE") or None
+
+
+def ssdp_search(timeout=6.0, st=protocol.SSDP_ST, iface=None):
     """Returns {ip: {header: value}} for every MMRoIP endpoint that answers."""
+    iface = _iface(iface)
     msg = ("M-SEARCH * HTTP/1.1\r\n"
            f"HOST: {protocol.SSDP_ADDR[0]}:{protocol.SSDP_ADDR[1]}\r\n"
            'MAN: "ssdp:discover"\r\n'
@@ -20,6 +30,9 @@ def ssdp_search(timeout=6.0, st=protocol.SSDP_ST):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
+    if iface:
+        s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(iface))
+        s.bind((iface, 0))                      # answers come back to this interface
     s.settimeout(1.0)
     found, t0 = {}, time.monotonic()
     try:
@@ -45,10 +58,13 @@ def ssdp_search(timeout=6.0, st=protocol.SSDP_ST):
     return found
 
 
-def whois(ip=None, timeout=3.0):
+def whois(ip=None, timeout=3.0, iface=None):
     """Diagnostic probe. Unicast if ip is given, otherwise broadcast."""
+    iface = _iface(iface)
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    if iface:
+        s.bind((iface, 0))
     s.settimeout(0.6)
     target = (ip or "255.255.255.255", protocol.WHOIS_PORT)
     out, t0 = {}, time.monotonic()
