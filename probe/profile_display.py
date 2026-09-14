@@ -46,10 +46,16 @@ def _reasons(reply):
     return {x.get("reason") for x in reply.get("details", [])}
 
 
+def _fault(d):
+    return d.state().get("fault")
+
+
 @test("P-1", "image round trip")
 def p01(d, ctx):
     r = Res("P-1", p01._name)
     d.quiesce()
+    if _fault(d):
+        return r.skipped(f"the device reports fault {_fault(d)!r}: nothing can be shown (see P-7)")
     w, h = _size(d)
     data = image.pattern("checker", w, h)
     reply = d.control(mode="show", objects={"image": image.encode(data)})
@@ -91,6 +97,8 @@ def p03(d, ctx):
 @test("P-4", "screen off blanks, on restores")
 def p04(d, ctx):
     r = Res("P-4", p04._name)
+    if _fault(d):
+        return r.skipped(f"the device reports fault {_fault(d)!r} (see P-7)")
     off = d.control(mode="show", objects={"screen": "off"})
     p = off.get("state", {}).get("profile", {})
     if not off.get("accepted") or p.get("screen") != "off" or p.get("phase") != "blank":
@@ -148,4 +156,22 @@ def p06(d, ctx):
     return r.passed(f"{current} -> {other} {size} -> {current}")
 
 
-TESTS = [p01, p02, p03, p04, p05, p06]
+@test("P-7", "a display fault is named and refuses pictures")
+def p07(d, ctx):
+    r = Res("P-7", p07._name)
+    fault = _fault(d)
+    if not fault:
+        return r.skipped("no fault reported; run against a device without a working display")
+    if fault not in ("display_not_found", "display_lost"):
+        return r.failed(f"unknown fault {fault!r}")
+    reply = d.control(mode="show")
+    if reply.get("accepted") is not False or reply.get("error") != "latched_fault":
+        return r.failed(f"show while faulty: accepted={reply.get('accepted')} error={reply.get('error')}")
+    after = d.control(mode="reset")
+    if not after.get("accepted"):
+        return r.failed(f"reset refused: {after.get('error')}")
+    still = after.get("state", {}).get("fault")
+    return r.passed(f"{fault}: show refused with latched_fault; reset retried the display, fault now {still!r}")
+
+
+TESTS = [p01, p02, p03, p04, p05, p06, p07]

@@ -286,7 +286,7 @@ def c16(d, ctx):
         d.control_udp(mode=h.activate)
         time.sleep(0.3)
     if not d.state().get("busy"):
-        return r.failed(f"ten '{h.activate}' messages did not make the device busy")
+        return r.failed(f"ten '{h.activate}' messages did not make the device busy{_fault_note(d)}")
     time.sleep(h.cycle_seconds(d) + 1.0)
     started = _count(d, h) - base
     d.control(mode=h.rest); d.wait_idle()
@@ -298,6 +298,12 @@ def c16(d, ctx):
 
 def _count(d, h):
     return d.pstate().get(h.counter)
+
+
+def _fault_note(d):
+    """A reported fault turns a puzzling FAIL into a diagnosis."""
+    fault = d.state().get("fault")
+    return f" — the device reports fault {fault!r}" if fault else ""
 
 
 @test("C-17", "seq echoed on both transports")
@@ -372,7 +378,7 @@ def c21(d, ctx):
     d.set_config(control_timeout_ms=2000, persist=False)
     d.control(mode=h.activate)
     if not d.wait(lambda s: s.get("busy"), 15):
-        return r.failed(f"'{h.activate}' did not make the device busy")
+        return r.failed(f"'{h.activate}' did not make the device busy{_fault_note(d)}")
     time.sleep(4.0)                                  # twice the timeout, silent
     st = d.state()
     auth, busy = st.get("authority"), st.get("busy")
@@ -442,7 +448,7 @@ def c24(d, ctx):
     if h.activate:
         d.control(mode=h.activate)
         if not d.wait(lambda s: s.get("busy"), 15):
-            return r.failed(f"'{h.activate}' did not make the device busy")
+            return r.failed(f"'{h.activate}' did not make the device busy{_fault_note(d)}")
     t0 = time.monotonic()
     d.control_udp(mode="estop")
     st = d.wait(lambda s: not s.get("busy"), 2.0, poll=0.05)
