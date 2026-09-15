@@ -1,0 +1,20 @@
+menu "MMRoIP"
+
+    config MMROIP_MDNS
+        bool "Advertise over mDNS"
+        default y
+        help
+            Makes <device_name>.local resolve and advertises the _mmroip._tcp service. A convenience
+            only: MMROIP-CORE-SPEC.md §6.2 requires every protocol test to pass with it compiled out.
+            About 35 KB.
+
+    config MMROIP_ETHERNET
+        bool "Ethernet first (ESP32 Ethernet MAC with an RMII PHY)"
+        depends on SOC_EMAC_SUPPORTED
+        default n
+        help
+            A cable with a link and a DHCP address wins; Wi-Fi is off while it lasts and comes back when the
+            cable goes. The PHY pins come from mmroip_config_t in mmroip_start(). A board application
+            usually selects this.
+
+endmenu

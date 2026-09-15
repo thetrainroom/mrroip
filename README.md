@@ -6,6 +6,7 @@ and the conformance probe that checks them.
 | Path | What |
 |---|---|
 | `MMROIP-CORE-SPEC.md` | Core endpoint specification (rev 1.0) |
+| `components/mmroip/` | ESP-IDF component: the endpoint core in C. The application adds the device profile |
 | `src/mmroip/` | Python package: `Device`, discovery, display images and partial updates. Standard library only |
 | `probe/mmroip_probe.py` | Core conformance suite C-1 … C-31 (§15) |
 | `probe/mmroip_lib.py` | Probe harness: results, profile hooks; transport comes from the package |
@@ -13,7 +14,7 @@ and the conformance probe that checks them.
 | `examples/send_image.py` | Show a picture, text or test pattern on a display endpoint |
 | `examples/clock.py` | An analog clock with a seconds dot on one or more displays, drawn without Pillow; fast-clock option (`--speed 4 --start 06:00`) |
 
-The first endpoint is the SSD1306 display in `../oled`.
+The first endpoint is the SSD1306 display in `../oled`. This folder is meant to become a repository of its own.
 
 ## Use
 
@@ -54,6 +55,45 @@ interface. `mmroip.ssdp_search(iface="192.168.4.2")` sends from another local ad
 `seq` must grow per sender address (§9.5). `Device` counts from a millisecond timestamp, so several
 programs on one computer stay in order. The probe counts from 1000 because two of its tests set `seq`
 themselves; wait 5 seconds after other tools before running it, or its first messages count as replays.
+
+## Firmware component (ESP-IDF)
+
+`components/mmroip/` is the endpoint core for ESP-IDF 6.1: `/definition`, `/config`, `/control` over HTTP and UDP,
+`/state`, authority and the control timeout, parameters in NVS, network bring-up (Ethernet first when configured,
+otherwise Wi-Fi with a setup portal), SSDP, whois and mDNS. The device itself is a *profile* that the application
+supplies: the functions declared in `include/mmroip_profile.h`. `../oled` is the first application.
+
+In the application's `main/idf_component.yml`:
+
+```yaml
+dependencies:
+  mmroip:
+    path: ../../mmroip/components/mmroip   # from its own repository later: git: <URL>, path: components/mmroip
+```
+
+```c
+#include "mmroip.h"
+
+void app_main(void)
+{
+    mmroip_init();                          // NVS, flash writer, parameter table (core and profile)
+    profile_start();                        // the application's profile
+    mmroip_start(&(mmroip_config_t){ .ethernet = NULL });   // or the PHY pins, with CONFIG_MMROIP_ETHERNET
+}
+```
+
+| Header | What for |
+|---|---|
+| `mmroip.h` | init and start, Ethernet pins, the `wifi` console command, config writes from a console, device id, restart |
+| `mmroip_profile.h` | the functions a profile implements |
+| `mmroip_params.h` | parameter descriptions; reading parameter values |
+| `mmroip_emit.h`, `mmroip_value.h` | JSON out and in for the profile, without a JSON library (core §13.4) |
+| `mmroip_net.h` | network state, e.g. for a status screen; Wi-Fi credentials |
+| `mmroip_base64.h` | Base64 decoding for binary object states |
+
+menuconfig → *MMRoIP*: `CONFIG_MMROIP_MDNS` (on by default, about 35 KB) and `CONFIG_MMROIP_ETHERNET`.
+The settings that keep a Wi-Fi endpoint near 690 KB live in the application (`../oled/sdkconfig.defaults` and the
+`wpa_supplicant` define in `../oled/CMakeLists.txt`; see `../oled/MMROIP-PLAN.md` §5).
 
 ## Probe
 
