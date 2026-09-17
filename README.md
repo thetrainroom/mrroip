@@ -14,7 +14,7 @@ and the conformance probe that checks them.
 | `examples/send_image.py` | Show a picture, text or test pattern on a display endpoint |
 | `examples/clock.py` | An analog clock with a seconds dot on one or more displays, drawn without Pillow; fast-clock option (`--speed 4 --start 06:00`) |
 
-The first endpoint is the SSD1306 display in `../oled`. This folder is meant to become a repository of its own.
+Endpoints so far: the 1-bit SSD1306 display in `../oled` and the 240x280 colour display in `../colour`. This folder is meant to become a repository of its own.
 
 ## Use
 
@@ -43,6 +43,12 @@ w, h = dev.image_size()
 dev.show_image(mmroip.image.text("Gleis 3", w, h))
 dev.show_image(mmroip.image.picture("logo.png", w, h), udp=True)
 dev.update_image(frame)                 # only the rectangles that changed since the last update_image
+
+w, h = dev.image_size()                                  # colour endpoints (plan question 16)
+dev.put_image(mmroip.image.pattern_rgb565("bars", w, h)) # PUT /objects/image, rgb565be
+dev.put_image(rect_pixels, x, y, w, h, base=image_id)    # a tile-aligned rectangle
+dev.update_image_rgb565(frame)                           # only the tiles that changed
+mmroip.image.image_id(frame, w, h, 20)                   # what state.profile.image.id must report
 dev.patch_image(crc, [(x, y, w, h, bytes)])   # rectangles on the image with checksum crc, by hand
 dev.tx_bytes                            # request bytes sent so far
 ```

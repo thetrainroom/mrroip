@@ -157,6 +157,67 @@ class Device:
         self._remember(data, reply)
         return reply
 
+    # -- colour endpoints: pixels by upload (plan question 16) ---------
+    def put_image(self, data, x=None, y=None, w=None, h=None, base=None):
+        """PUT /objects/image: rgb565be pixels, the whole picture or a tile-aligned rectangle (then base is the
+        image id underneath). Returns the control response."""
+        query = ""
+        if x is not None:
+            query = f"?x={x}&y={y}&w={w}&h={h}"
+        self.seq += 1
+        headers = {"Content-Type": "application/octet-stream",
+                   protocol.HEADER_PREFIX + "Seq": str(self.seq)}
+        if base:
+            headers[protocol.HEADER_PREFIX + "Base"] = base
+        self.tx_bytes += len(data)
+        r = urllib.request.Request(f"http://{self.ip}/objects/image{query}", data=data, method="PUT",
+                                   headers=headers)
+        try:
+            with urllib.request.urlopen(r, timeout=self.timeout) as f:
+                return json.loads(f.read() or b"{}")
+        except urllib.error.HTTPError as e:
+            raw = e.read()
+            try:    return json.loads(raw or b"{}")
+            except Exception:
+                    return {"accepted": False, "_raw": raw[:400].decode("utf8", "replace")}
+
+    def image_tile_px(self):
+        """The tile size the endpoint groups its picture into, or 0 if it takes no uploads."""
+        obj = next((o for o in (self.dfn or self.definition()).get("objects", []) if o.get("id") == "image"), {})
+        return obj.get("profile", {}).get("tile_px", 0)
+
+    def update_image_rgb565(self, data):
+        """Show an rgb565be picture, sending only the tiles that differ from the last one this method sent.
+        Falls back to the whole picture the first time, when the endpoint shows something else, or when the
+        rectangles would not be smaller. Returns the control response, or None if nothing changed."""
+        w, h = self.image_size()
+        tile = self.image_tile_px() or 20
+        if self._image is not None:
+            old, previous_id = self._image
+            if old == data:
+                return None
+            rects = image.changed_tiles(old, data, w, h, tile)
+            if rects and sum(r[2] * r[3] * 2 for r in rects) < len(data):
+                reply = None
+                for (rx, ry, rw, rh) in rects:
+                    reply = self.put_image(image.crop_rgb565(data, w, rx, ry, rw, rh), rx, ry, rw, rh,
+                                           base=previous_id)
+                    if not reply.get("accepted"):
+                        break
+                    previous_id = ((reply.get("state") or {}).get("profile") or {}).get("image", {}).get("id")
+                if reply is not None and reply.get("accepted"):
+                    self._remember_rgb565(data, reply)
+                    return reply
+        reply = self.put_image(data)
+        self._remember_rgb565(data, reply)
+        return reply
+
+    def _remember_rgb565(self, data, reply):
+        w, h = self.image_size()
+        shown = ((reply.get("state") or {}).get("profile") or {}).get("image") or {}
+        ok = reply.get("accepted") and shown.get("id") == image.image_id(data, w, h, self.image_tile_px() or 20)
+        self._image = (data, shown.get("id")) if ok else None
+
     def _remember(self, data, reply):
         shown = ((reply.get("state") or {}).get("profile") or {}).get("image") or {}
         ok = reply.get("accepted") and shown.get("crc32") == image.crc32(data)

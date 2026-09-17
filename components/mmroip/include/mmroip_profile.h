@@ -6,6 +6,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include "mmroip_emit.h"
 #include "mmroip_params.h"
 #include "mmroip_value.h"
@@ -48,6 +49,19 @@ void profile_estop(void);
 void profile_reset(void);
 // Loss of the master for mobile and stationary devices without a programme (§11.3); passive devices hold
 void profile_come_to_rest(void);
+
+// Binary object states, uploaded with PUT /objects/<id> (plan question 16): pixel data too large for a JSON
+// message. The core applies seq, authority and the estop and fault latches exactly as for /control, then hands
+// the profile the body as it arrives. A profile without such objects need not define these functions: the core's
+// weak defaults refuse every upload.
+//
+// request: the query parameters (integers where they parse as integers) and "base" from the X-MMROIP-Base
+// header when it was sent; length: the body's size. Returns NULL if the upload may start, otherwise a reason.
+const char *profile_object_stream_begin(const char *id, const object_value_t *request, size_t length);
+// A piece of the body; returning false stops the upload, which then ends incomplete
+bool profile_object_stream_data(const uint8_t *data, size_t len);
+// The body is over; complete is false if the connection broke or fewer bytes arrived than announced
+void profile_object_stream_end(bool complete);
 
 typedef enum { PROFILE_MSG_CONTROL, PROFILE_MSG_CONFIG } profile_msg_t;
 // Every /control message and /config write after the core handled it, from whichever task received it.

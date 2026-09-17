@@ -26,6 +26,9 @@ static const char *TAG = "http_api";
 #define BODY_MAX            4096        // §5.3
 #define RESTART_DELAY_MS    500
 #define CONTROL_REPLY_MAX   1536
+#define OBJECT_ID_MAX       32
+#define STREAM_CHUNK        1460        // one TCP segment's worth
+#define STREAM_TIMEOUTS_MAX 3           // receive timeouts in a row before an upload counts as broken
 
 static httpd_handle_t server;
 static char device_id[32];
@@ -121,6 +124,7 @@ static esp_err_t definition_get(httpd_req_t *req)
     cJSON_AddStringToObject(endpoints, "config", "/config");
     cJSON_AddStringToObject(endpoints, "control", "/control");
     cJSON_AddStringToObject(endpoints, "state", "/state");
+    cJSON_AddStringToObject(endpoints, "objects", "/objects/{id}");     // binary uploads (plan question 16)
     cJSON_AddNumberToObject(endpoints, "udp_control_port", params_get_int("udp_port"));
 
     cJSON *capabilities = cJSON_AddObjectToObject(root, "capabilities");
@@ -240,6 +244,113 @@ static esp_err_t control_post(httpd_req_t *req)
     return httpd_resp_sendstr(req, reply);
 }
 
+// The query string as values for the profile: integers where they parse as integers, strings otherwise.
+// The core names no parameter; what they mean is the profile's business.
+static void add_query_values(httpd_req_t *req, cJSON *request)
+{
+    char query[160];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK) {
+        return;
+    }
+    char *save = NULL;
+    for (char *pair = strtok_r(query, "&", &save); pair; pair = strtok_r(NULL, "&", &save)) {
+        char *eq = strchr(pair, '=');
+        if (!eq || eq == pair) {
+            continue;
+        }
+        *eq = '\0';
+        char *end = NULL;
+        long number = strtol(eq + 1, &end, 10);
+        if (eq[1] && end && *end == '\0') {
+            cJSON_AddNumberToObject(request, pair, number);
+        } else {
+            cJSON_AddStringToObject(request, pair, eq + 1);
+        }
+    }
+}
+
+static esp_err_t send_control_reply(httpd_req_t *req, int status, const char *reply)
+{
+    if (status == 400) {
+        httpd_resp_set_status(req, "400 Bad Request");
+    } else if (status == 409) {
+        httpd_resp_set_status(req, "409 Conflict");
+    }
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, reply);
+}
+
+// PUT /objects/<id>: an object state as a binary body, streamed to the profile (plan question 16)
+static esp_err_t object_put(httpd_req_t *req)
+{
+    char reply[CONTROL_REPLY_MAX];
+    const char *path = req->uri + strlen("/objects/");
+    size_t id_len = strcspn(path, "?");
+    if (id_len == 0 || id_len >= OBJECT_ID_MAX) {
+        return send_error(req, "404 Not Found", "not_found");
+    }
+    char id[OBJECT_ID_MAX];
+    memcpy(id, path, id_len);
+    id[id_len] = '\0';
+
+    cJSON *request = cJSON_CreateObject();
+    add_query_values(req, request);
+    char base[40];
+    if (httpd_req_get_hdr_value_str(req, MMROIP_HEADER "Base", base, sizeof(base)) == ESP_OK) {
+        cJSON_AddStringToObject(request, "base", base);
+    }
+    char seq_text[32];
+    double seq = 0;
+    bool have_seq = false;
+    if (httpd_req_get_hdr_value_str(req, MMROIP_HEADER "Seq", seq_text, sizeof(seq_text)) == ESP_OK) {
+        char *end = NULL;
+        seq = strtod(seq_text, &end);
+        have_seq = seq_text[0] && end && *end == '\0';
+    }
+
+    struct sockaddr_in peer = {0};
+    socklen_t peer_len = sizeof(peer);
+    getpeername(httpd_req_to_sockfd(req), (struct sockaddr *)&peer, &peer_len);
+
+    int status = control_stream_begin(id, request, have_seq, seq, req->content_len, peer.sin_addr.s_addr,
+                                      reply, sizeof(reply));
+    cJSON_Delete(request);
+    if (status != 200) {
+        esp_err_t err = send_control_reply(req, status, reply);
+        if (req->content_len > 0) {
+            httpd_sess_trigger_close(req->handle, httpd_req_to_sockfd(req));   // the unread body is still on the socket
+        }
+        return err;
+    }
+
+    char *chunk = malloc(STREAM_CHUNK);
+    size_t received = 0;
+    int timeouts = 0;
+    bool reading = (chunk != NULL);
+    while (reading && received < req->content_len) {
+        size_t wanted = req->content_len - received < STREAM_CHUNK ? req->content_len - received : STREAM_CHUNK;
+        int r = httpd_req_recv(req, chunk, wanted);
+        if (r == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < STREAM_TIMEOUTS_MAX) {
+            continue;
+        }
+        if (r <= 0) {
+            break;
+        }
+        timeouts = 0;
+        received += (size_t)r;
+        reading = profile_object_stream_data((const uint8_t *)chunk, (size_t)r);
+    }
+    free(chunk);
+
+    bool complete = (received == req->content_len);
+    status = control_stream_end(complete, have_seq, seq, reply, sizeof(reply));
+    esp_err_t err = send_control_reply(req, status, reply);
+    if (!complete) {
+        httpd_sess_trigger_close(req->handle, httpd_req_to_sockfd(req));
+    }
+    return err;
+}
+
 static esp_err_t not_found(httpd_req_t *req, httpd_err_code_t error)
 {
     net_status_t net;
@@ -264,6 +375,7 @@ void http_api_start(void)
     config.max_uri_handlers = 12;
     config.stack_size = 6 * 1024;
     config.lru_purge_enable = true;
+    config.uri_match_fn = httpd_uri_match_wildcard;       // /objects/<id>
     if (httpd_start(&server, &config) != ESP_OK) {
         ESP_LOGE(TAG, "HTTP server did not start");
         return;
@@ -274,6 +386,7 @@ void http_api_start(void)
         { .uri = "/config",     .method = HTTP_POST, .handler = config_post },
         { .uri = "/state",      .method = HTTP_GET,  .handler = state_get },
         { .uri = "/control",    .method = HTTP_POST, .handler = control_post },
+        { .uri = "/objects/*",  .method = HTTP_PUT,  .handler = object_put },
     };
     for (size_t i = 0; i < sizeof(handlers) / sizeof(handlers[0]); i++) {
         httpd_register_uri_handler(server, &handlers[i]);

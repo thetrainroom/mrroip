@@ -156,6 +156,24 @@ static int print_reply(cJSON *reply, char *out, size_t outlen, int status)
     return status;
 }
 
+// An accepted state change from source_ip: note a takeover (§11.2) and hand it authority
+static void command_authority_locked(uint32_t source_ip, int64_t now, cJSON *reply)
+{
+    if (authority == AUTH_COMMANDED && authority_ip != source_ip) {
+        char previous[16];
+        ip_text(authority_ip, previous, sizeof(previous));
+        cJSON_AddStringToObject(reply, "authority_taken_from", previous);
+    }
+    if (authority != AUTH_COMMANDED || authority_ip != source_ip) {
+        char ip[16];
+        ip_text(source_ip, ip, sizeof(ip));
+        ESP_LOGW(TAG, "AUTHORITY %s -> commanded (master %s)", authority_names[authority], ip);
+    }
+    authority = AUTH_COMMANDED;
+    authority_ip = source_ip;
+    authority_ms = now;
+}
+
 void control_reject(const char *error, char *out, size_t outlen)
 {
     cJSON *reply = cJSON_CreateObject();
@@ -343,4 +361,92 @@ done:
     cJSON_Delete(msg);
     profile_message(PROFILE_MSG_CONTROL, status == 200);
     return print_reply(reply, out, outlen, status);
+}
+
+int control_stream_begin(const char *object_id, const object_value_t *request, bool have_seq, double seq,
+                         size_t length, uint32_t source_ip, char *out, size_t outlen)
+{
+    discovery_note_traffic();
+    cJSON *reply = cJSON_CreateObject();
+    const char *error = NULL;
+    const char *reason = NULL;
+    int status = 400;
+    cJSON_AddStringToObject(reply, "device_id", http_api_device_id());
+    if (have_seq) {
+        cJSON_AddNumberToObject(reply, "ack_seq", seq);
+    }
+
+    xSemaphoreTake(lock, portMAX_DELAY);
+    master_t *master = master_for(source_ip);
+    int64_t now = now_ms();
+    if (!have_seq) {
+        error = "missing_field";
+        goto reject;
+    }
+    if (master->used && seq <= master->last_seq && now - master->last_ms <= REPLAY_WINDOW_MS) {
+        error = "stale_seq";
+        status = 409;
+        goto reject;
+    }
+    // The latches before the profile: starting an upload prepares its buffers
+    if (estop_latched) {
+        error = "latched_estop";
+        status = 409;
+        goto reject;
+    }
+    if (profile_fault()) {
+        error = "latched_fault";
+        status = 409;
+        goto reject;
+    }
+    reason = profile_object_stream_begin(object_id, request, length);
+    if (reason) {
+        error = "invalid_object_state";
+        goto reject;
+    }
+
+    master->used = true;
+    master->last_seq = seq;
+    master->last_ms = now;
+    command_authority_locked(source_ip, now, reply);
+    xSemaphoreGive(lock);
+    cJSON_Delete(reply);            // an upload that started answers when it ends
+    return 200;
+
+reject:
+    cJSON_AddBoolToObject(reply, "accepted", false);
+    cJSON_AddStringToObject(reply, "error", error);
+    if (!have_seq) {
+        cJSON_AddStringToObject(reply, "field", "seq");
+    }
+    if (reason) {
+        cJSON *details = cJSON_AddArrayToObject(reply, "details");
+        cJSON *detail = cJSON_CreateObject();
+        cJSON_AddStringToObject(detail, "key", object_id);
+        cJSON_AddStringToObject(detail, "reason", reason);
+        cJSON_AddItemToArray(details, detail);
+    }
+    cJSON_AddItemToObject(reply, "state", state_json_locked());
+    xSemaphoreGive(lock);
+    profile_message(PROFILE_MSG_CONTROL, false);
+    return print_reply(reply, out, outlen, status);
+}
+
+int control_stream_end(bool complete, bool have_seq, double seq, char *out, size_t outlen)
+{
+    profile_object_stream_end(complete);
+    cJSON *reply = cJSON_CreateObject();
+    cJSON_AddStringToObject(reply, "device_id", http_api_device_id());
+    if (have_seq) {
+        cJSON_AddNumberToObject(reply, "ack_seq", seq);
+    }
+    cJSON_AddBoolToObject(reply, "accepted", complete);
+    if (!complete) {
+        cJSON_AddStringToObject(reply, "error", "incomplete_body");
+    }
+    xSemaphoreTake(lock, portMAX_DELAY);
+    cJSON_AddItemToObject(reply, "state", state_json_locked());
+    xSemaphoreGive(lock);
+    profile_message(PROFILE_MSG_CONTROL, complete);
+    return print_reply(reply, out, outlen, complete ? 200 : 400);
 }
