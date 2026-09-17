@@ -14,9 +14,18 @@ import socket
 import struct
 import time
 
+from . import protocol
+
 RTP_VERSION = 2
 DEFAULT_PAYLOAD_TYPE = 96
+#: one payload type per format, so a capture identifies the pixels (protocol.py)
+PAYLOAD_TYPES = protocol.RTP_PAYLOAD_TYPES
+#: what a session description calls each format; RFC 4175 names the standard one, RGB565 is MMRoIP's own
+SAMPLING = {"rgb": ("RGB", 8), "rgb565be": ("RGB565", 16)}
 CLOCK_HZ = 90000
+#: leap seconds between TAI and UTC (37 since 2017). ST 2110 senders count their 90 kHz clock from the TAI
+#: epoch, so an analyser can compare a stream's timestamps with its own clock.
+TAI_UTC_OFFSET_S = 37
 #: octets per pixel group; both formats here carry one pixel per group
 PGROUP = {"rgb565be": 2, "rgb": 3}
 
@@ -24,10 +33,11 @@ PGROUP = {"rgb565be": 2, "rgb": 3}
 class Sender:
     """Sends frames to an endpoint's stream port. One instance is one stream: it keeps the sequence numbers."""
 
-    def __init__(self, ip, port, width, height, fmt="rgb565be", payload_type=DEFAULT_PAYLOAD_TYPE,
-                 mtu=1400, ssrc=None, sock=None, fps=0):
+    def __init__(self, ip, port, width, height, fmt="rgb565be", payload_type=None,
+                 mtu=1400, ssrc=None, sock=None, fps=0, tai_offset=TAI_UTC_OFFSET_S):
         if fmt not in PGROUP:
             raise ValueError(f"unknown format {fmt!r}")
+        payload_type = PAYLOAD_TYPES.get(fmt, DEFAULT_PAYLOAD_TYPE) if payload_type is None else payload_type
         self.ip, self.port, self.width, self.height, self.fmt = ip, port, width, height, fmt
         self.payload_type, self.mtu = payload_type, mtu
         self.ssrc = ssrc if ssrc is not None else random.getrandbits(32)
@@ -40,9 +50,31 @@ class Sender:
         #: which a small endpoint cannot drain while it is painting
         self.fps = fps
         self._next_packet = None
+        #: 90 kHz from the TAI epoch, stepped by the nominal frame period, as a video sender does: an analyser
+        #: then sees equal deltas and a timestamp that matches its own clock, whatever the network did
+        self.tai_offset = tai_offset
+        self._timestamp = None
 
     def close(self):
         self.sock.close()
+
+    def sdp(self, source_ip="0.0.0.0", name="MMRoIP video"):
+        """A session description for this stream: for Wireshark's "Decode As", for ffplay, or for documentation.
+        RFC 4175 has no RGB565, so that sampling name is MMRoIP's own, like the payload type."""
+        sampling, depth = SAMPLING[self.fmt]
+        return "\n".join([
+            "v=0",
+            f"o=- 0 0 IN IP4 {source_ip}",
+            f"s={name}",
+            f"c=IN IP4 {self.ip}",
+            "t=0 0",
+            f"m=video {self.port} RTP/AVP {self.payload_type}",
+            f"a=rtpmap:{self.payload_type} raw/{CLOCK_HZ}",
+            f"a=fmtp:{self.payload_type} sampling={sampling}; width={self.width}; height={self.height}; "
+            f"depth={depth}; colorimetry=BT709",
+            f"a=framerate:{self.fps or 0}",
+            "",
+        ])
 
     def _packet(self, timestamp, marker, lines, payload):
         """lines: (length, line_number, offset) per piece, in the order their pixels follow in `payload`."""
@@ -65,8 +97,19 @@ class Sender:
         self.packets += 1
         self.tx_bytes += len(datagram)
 
+    def frame_timestamp(self):
+        """The 90 kHz timestamp for the next frame: the TAI clock at the start, then the nominal frame period."""
+        if self._timestamp is None:
+            self._timestamp = int((time.time() + self.tai_offset) * CLOCK_HZ) & 0xFFFFFFFF
+        elif self.fps:
+            self._timestamp = (self._timestamp + round(CLOCK_HZ / self.fps)) & 0xFFFFFFFF
+        else:
+            self._timestamp = int((time.time() + self.tai_offset) * CLOCK_HZ) & 0xFFFFFFFF
+        return self._timestamp
+
     def send_frame(self, data, timestamp=None):
-        """One frame: `data` is width x height pixels in this stream's format, row-major."""
+        """One frame: `data` is width x height pixels in this stream's format, row-major. Every packet of a frame
+        carries the same timestamp; the marker bit sits on the last one."""
         pgroup = PGROUP[self.fmt]
         if self.fps:
             packets = -(-(self.width * self.height * pgroup) // (self.mtu - 20))
@@ -78,7 +121,7 @@ class Sender:
         if len(data) != stride * self.height:
             raise ValueError(f"{len(data)} bytes, expected {stride * self.height}")
         if timestamp is None:
-            timestamp = int(time.monotonic() * CLOCK_HZ)
+            timestamp = self.frame_timestamp()
         # Each packet carries whole rows while they fit, then part of a row
         room = self.mtu - 12 - 2                        # RTP header and extended sequence number
         lines, payload, line, offset = [], bytearray(), 0, 0

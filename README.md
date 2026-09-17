@@ -12,6 +12,8 @@ and the conformance probe that checks them.
 | `probe/mmroip_lib.py` | Probe harness: results, profile hooks; transport comes from the package |
 | `probe/discovery_check.py` | What endpoints show on the network, and what happens across a boot (D-1 … D-11) |
 | `examples/send_image.py` | Show a picture, text or test pattern on a display endpoint |
+| `examples/bounce.py` | A box bouncing on a colour endpoint: tile updates over HTTP, or whole frames over RTP |
+| `examples/stream_ffmpeg.py` | Stream anything FFmpeg can read to a colour endpoint |
 | `examples/clock.py` | An analog clock with a seconds dot on one or more displays, drawn without Pillow; fast-clock option (`--speed 4 --start 06:00`) |
 
 Endpoints so far: the 1-bit SSD1306 display in `../oled` and the 240x280 colour display in `../colour`. This folder is meant to become a repository of its own.
@@ -49,7 +51,9 @@ dev.put_image(mmroip.image.pattern_rgb565("bars", w, h)) # PUT /objects/image, r
 dev.put_image(rect_pixels, x, y, w, h, base=image_id)    # a tile-aligned rectangle
 dev.update_image_rgb565(frame)                           # only the tiles that changed
 dev.control(mode="show", objects={"stream": {"port": 5004}})     # moving pictures: start
-mmroip.rtp.Sender(dev.ip, 5004, w, h, fps=5).send_frame(frame)   # RFC 4175 over RTP, paced
+sender = mmroip.rtp.Sender(dev.ip, 5004, w, h, fps=5)            # RFC 4175 over RTP, paced, TAI timestamps
+sender.send_frame(frame)
+print(sender.sdp())                                              # for Wireshark "Decode As", ffplay, docs
 mmroip.image.image_id(frame, w, h, 20)                   # what state.profile.image.id must report
 dev.patch_image(crc, [(x, y, w, h, bytes)])   # rectangles on the image with checksum crc, by hand
 dev.tx_bytes                            # request bytes sent so far

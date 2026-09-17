@@ -143,8 +143,7 @@ class Device:
             old, crc = self._image
             if old == data:
                 return None
-            obj = next((o for o in self.dfn.get("objects", []) if o.get("id") == "image"), {})
-            max_rects = obj.get("profile", {}).get("max_rects", 0)
+            max_rects = self._max_rects()
             rects = image.changed_rects(old, data, w, h, max_rects=max_rects) if max_rects else []
             parts = [(x, y, rw, rh, image.crop(data, w, x, y, rw, rh)) for x, y, rw, rh in rects]
             if parts and sum(len(p[4]) for p in parts) < len(data):
@@ -181,22 +180,32 @@ class Device:
             except Exception:
                     return {"accepted": False, "_raw": raw[:400].decode("utf8", "replace")}
 
+    def _max_rects(self):
+        obj = next((o for o in (self.dfn or self.definition()).get("objects", []) if o.get("id") == "image"), {})
+        return obj.get("profile", {}).get("max_rects", 8)
+
     def image_tile_px(self):
         """The tile size the endpoint groups its picture into, or 0 if it takes no uploads."""
         obj = next((o for o in (self.dfn or self.definition()).get("objects", []) if o.get("id") == "image"), {})
         return obj.get("profile", {}).get("tile_px", 0)
 
-    def update_image_rgb565(self, data):
+    def update_image_rgb565(self, data, max_rects=None):
         """Show an rgb565be picture, sending only the tiles that differ from the last one this method sent.
         Falls back to the whole picture the first time, when the endpoint shows something else, or when the
-        rectangles would not be smaller. Returns the control response, or None if nothing changed."""
+        rectangles would not be smaller. Returns the control response, or None if nothing changed.
+
+        max_rects limits how many rectangles one picture may take; more are merged into their bounding box.
+        max_rects=1 sends everything that changed in a single write, which matters for a moving object: with
+        several writes the endpoint erases the old position and draws the new one milliseconds apart, and the
+        eye sees the seam."""
         w, h = self.image_size()
         tile = self.image_tile_px() or 20
         if self._image is not None:
             old, previous_id = self._image
             if old == data:
                 return None
-            rects = image.changed_tiles(old, data, w, h, tile)
+            rects = image.changed_tiles(old, data, w, h, tile,
+                                        max_rects=max_rects or self._max_rects())
             if rects and sum(r[2] * r[3] * 2 for r in rects) < len(data):
                 reply = None
                 for (rx, ry, rw, rh) in rects:
