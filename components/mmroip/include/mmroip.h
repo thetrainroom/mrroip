@@ -35,6 +35,11 @@ bool mmroip_console_command(const char *cmd, const char *arg);
 // msg. Returns true if accepted; *restarting (may be NULL) tells whether the endpoint restarts to apply it.
 bool mmroip_config_write(const char *json, char *msg, size_t size, bool *restarting);
 
+// The master holding authority now, as an IPv4 address in network byte order, or 0 if none (§11). A profile
+// that receives its own stream can check that packets come from that master. Safe to call from profile_apply():
+// it takes no lock, so it cannot wait for the control lock the core already holds there.
+uint32_t mmroip_master_ip(void);
+
 // The Wi-Fi station MAC, lowercase and colon-separated (§4)
 const char *mmroip_device_id(void);
 // Restart after queued flash writes, with ssdp:byebye; erase the namespace first for a factory reset

@@ -36,6 +36,11 @@ void mmroip_start(const mmroip_config_t *config)
     discovery_start();
 }
 
+uint32_t mmroip_master_ip(void)
+{
+    return control_master_ip();
+}
+
 const char *mmroip_device_id(void)
 {
     return http_api_device_id();

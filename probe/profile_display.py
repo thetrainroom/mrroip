@@ -1,6 +1,12 @@
 """
-profile_display.py — profile tests and core-suite hooks for the `display` profile: a bitmap-only SSD1306
-endpoint (../../oled/MMROIP-PLAN.md §2). mmroip_probe.py loads it when /definition.device_type is "display".
+profile_display.py — profile tests and core-suite hooks for the `display` profile. mmroip_probe.py loads it when
+/definition.device_type is "display", for both kinds of panel:
+
+  * 1-bit SSD1306 endpoints (../../oled/MMROIP-PLAN.md §2), format "1bpp-row-msb": P-1 … P-11
+  * colour endpoints (question 16), format "rgb565be": P-12 … P-15, where pixels arrive with PUT /objects/image
+    and the device remembers them as a CRC32 per tile
+
+Each test skips when it does not fit the endpoint's format.
 
     python3.12 mmroip_probe.py --host 192.168.10.164 --no-prompt --only C-16,C-21,C-24,P-1,P-2,P-3,P-4,P-5,P-6
 
@@ -11,7 +17,7 @@ P-8 … P-11 test partial updates (rectangles on top of the image on screen, gua
 import time
 import zlib
 
-from mmroip import image
+from mmroip import image, rtp
 from mmroip_lib import Hooks, Res, test, wait_back
 
 
@@ -51,9 +57,35 @@ def _fault(d):
     return d.state().get("fault")
 
 
+def _image_profile(d):
+    dfn = d.dfn or d.definition()
+    return next((o.get("profile", {}) for o in dfn.get("objects", []) if o.get("id") == "image"), {})
+
+
+def _format(d):
+    return _image_profile(d).get("format", "")
+
+
+def _one_bit(d, r):
+    """A reason to skip, when the endpoint is not a 1-bit panel."""
+    return None if _format(d) == "1bpp-row-msb" else f"format is {_format(d)!r}, not a 1-bit panel"
+
+
+def _colour(d, r):
+    """A reason to skip, when the endpoint is not a colour panel that takes uploads."""
+    return None if _format(d) == "rgb565be" else f"format is {_format(d)!r}, not a colour panel"
+
+
+def _image_state(d):
+    return d.pstate().get("image") or {}
+
+
 @test("P-1", "image round trip")
 def p01(d, ctx):
     r = Res("P-1", p01._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     d.quiesce()
     if _fault(d):
         return r.skipped(f"the device reports fault {_fault(d)!r}: nothing can be shown (see P-7)")
@@ -70,6 +102,9 @@ def p01(d, ctx):
 @test("P-2", "image of the wrong size rejected")
 def p02(d, ctx):
     r = Res("P-2", p02._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     w, h = _size(d)
     before = _crc_on_screen(d)
     short = image.encode(image.pattern("border", w, h)[:-8])
@@ -85,6 +120,9 @@ def p02(d, ctx):
 @test("P-3", "invalid Base64 rejected")
 def p03(d, ctx):
     r = Res("P-3", p03._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     w, h = _size(d)
     before = _crc_on_screen(d)
     garbage = "!" * len(image.encode(image.pattern("border", w, h)))     # right length, not Base64
@@ -114,6 +152,9 @@ def p04(d, ctx):
 @test("P-5", "contrast applies and is range-checked")
 def p05(d, ctx):
     r = Res("P-5", p05._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     current = d.cfg()["contrast"]
     new = 60 if current != 60 else 90
     code, body = d.set_config(contrast=new, persist=False)
@@ -130,6 +171,9 @@ def p05(d, ctx):
 @test("P-6", "panel applies at restart")
 def p06(d, ctx):
     r = Res("P-6", p06._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     p = d.param("panel")
     if not p or p.get("applies") != "restart" or not p.get("values"):
         return r.failed("panel is not declared with values and applies: restart")
@@ -189,6 +233,9 @@ def _show_checker(d):
 @test("P-8", "partial update replaces its rectangle")
 def p08(d, ctx):
     r = Res("P-8", p08._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     d.quiesce()
     if _fault(d):
         return r.skipped(f"the device reports fault {_fault(d)!r} (see P-7)")
@@ -211,6 +258,9 @@ def p08(d, ctx):
 @test("P-9", "partial update on the wrong image refused")
 def p09(d, ctx):
     r = Res("P-9", p09._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     d.quiesce()
     if not _fault(d) and _show_checker(d) is None:
         return r.failed("the full image underneath was rejected")
@@ -226,6 +276,9 @@ def p09(d, ctx):
 @test("P-10", "a repeated partial update is harmless")
 def p10(d, ctx):
     r = Res("P-10", p10._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     d.quiesce()
     if _fault(d):
         return r.skipped(f"the device reports fault {_fault(d)!r} (see P-7)")
@@ -245,6 +298,9 @@ def p10(d, ctx):
 @test("P-11", "invalid rectangles refused")
 def p11(d, ctx):
     r = Res("P-11", p11._name)
+    skip = _one_bit(d, r)
+    if skip:
+        return r.skipped(skip)
     d.quiesce()
     w, h = _size(d)
     before = _crc_on_screen(d)
@@ -274,4 +330,124 @@ def p11(d, ctx):
         else r.failed("a refused partial update changed the picture")
 
 
-TESTS = [p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11]
+@test("P-12", "colour upload round trip")
+def p12(d, ctx):
+    r = Res("P-12", p12._name)
+    skip = _colour(d, r)
+    if skip:
+        return r.skipped(skip)
+    d.quiesce()
+    w, h = _size(d)
+    tile = d.image_tile_px()
+    pixels = image.pattern_rgb565("bars", w, h)
+    t0 = time.monotonic()
+    reply = d.put_image(pixels)
+    seconds = time.monotonic() - t0
+    if not reply.get("accepted"):
+        return r.failed(f"rejected: {reply.get('error')} {reply.get('details')}")
+    want, got = image.image_id(pixels, w, h, tile), _image_state(d).get("id")
+    if got != want:
+        return r.failed(f"/state reports image id {got}, the host computes {want}")
+    return r.passed(f"{len(pixels)} bytes in {seconds:.2f} s, id {got}, {tile} px tiles")
+
+
+@test("P-13", "tile-aligned partial update")
+def p13(d, ctx):
+    r = Res("P-13", p13._name)
+    skip = _colour(d, r)
+    if skip:
+        return r.skipped(skip)
+    w, h = _size(d)
+    tile = d.image_tile_px()
+    base_picture = image.pattern_rgb565("gradient", w, h)
+    if not d.put_image(base_picture).get("accepted"):
+        return r.failed("the picture underneath was rejected")
+    base_id = _image_state(d).get("id")
+
+    rect = (tile, tile * 2, tile * 3, tile * 2)
+    patch = image.pattern_rgb565("checker", w, h)
+    mixed = bytearray(base_picture)
+    stride = w * 2
+    for row in range(rect[3]):
+        at = (rect[1] + row) * stride + rect[0] * 2
+        mixed[at: at + rect[2] * 2] = patch[at: at + rect[2] * 2]
+    mixed = bytes(mixed)
+
+    reply = d.put_image(image.crop_rgb565(mixed, w, *rect), *rect, base=base_id)
+    if not reply.get("accepted"):
+        return r.failed(f"rejected: {reply.get('error')} {reply.get('details')}")
+    want, got = image.image_id(mixed, w, h, tile), _image_state(d).get("id")
+    return r.passed(f"{rect[2]}x{rect[3]} at ({rect[0]}, {rect[1]}), id {got}") if got == want \
+        else r.failed(f"/state reports {got}, the host computes {want}")
+
+
+@test("P-14", "invalid uploads refused")
+def p14(d, ctx):
+    r = Res("P-14", p14._name)
+    skip = _colour(d, r)
+    if skip:
+        return r.skipped(skip)
+    w, h = _size(d)
+    tile = d.image_tile_px()
+    picture = image.pattern_rgb565("bars", w, h)
+    if not d.put_image(picture).get("accepted"):
+        return r.failed("the picture underneath was rejected")
+    before = _image_state(d).get("id")
+    rect = (tile, tile, tile * 2, tile * 2)
+    pixels = image.crop_rgb565(picture, w, *rect)
+
+    cases = {
+        "stale_base": d.put_image(pixels, *rect, base="00000000"),
+        "missing_base": d.put_image(pixels, *rect),
+        "not_tile_aligned": d.put_image(pixels, rect[0] + 1, rect[1], rect[2], rect[3], base=before),
+        "wrong_size": d.put_image(pixels[:-4], *rect, base=before),
+        "upload_only": d.control(mode="show", objects={"image": "AAAA"}),
+    }
+    wrong = [f"{reason}: {reply.get('error')} {reply.get('details')}"
+             for reason, reply in cases.items()
+             if reply.get("accepted") is not False or reason not in _reasons(reply)]
+    if wrong:
+        return r.failed("; ".join(wrong))
+    return r.passed(f"{len(cases)} reasons, picture kept") if _image_state(d).get("id") == before \
+        else r.failed("a refused upload changed the picture")
+
+
+@test("P-15", "streamed frames arrive whole")
+def p15(d, ctx):
+    r = Res("P-15", p15._name)
+    skip = _colour(d, r)
+    if skip:
+        return r.skipped(skip)
+    stream = next((o for o in (d.dfn or d.definition()).get("objects", []) if o.get("id") == "stream"), None)
+    if not stream:
+        return r.skipped("this endpoint has no stream object")
+    port = stream.get("profile", {}).get("default_port", 5004)
+    w, h = _size(d)
+    tile = d.image_tile_px()
+
+    if not d.control(mode="show", objects={"stream": {"port": port}}).get("accepted"):
+        return r.failed("the stream did not start")
+    before = d.pstate().get("stream", {})
+    sender = rtp.Sender(d.ip, port, w, h, "rgb565be", fps=5)
+    frames, last = 8, None
+    for i in range(frames):
+        last = image.pattern_rgb565("gradient" if i % 2 else "checker", w, h)
+        sender.send_frame(last)
+    sender.close()
+    time.sleep(1.2)
+    state = d.pstate()
+    after = state.get("stream", {})
+    d.control(mode="show", objects={"stream": "off"})
+
+    received = after.get("frames", 0) - before.get("frames", 0)
+    lost = after.get("lost_packets", 0) - before.get("lost_packets", 0)
+    if received < frames:
+        return r.failed(f"{received} of {frames} frames arrived, {lost} packets lost — the endpoint cannot "
+                        f"keep up at 5 frames a second")
+    want, got = image.image_id(last, w, h, tile), (state.get("image") or {}).get("id")
+    return r.passed(f"{received} frames, {lost} packets lost, id {got}") if got == want \
+        else r.failed(f"after {received} frames /state reports {got}, the host computes {want} "
+                      f"(tiles known: {(state.get('image') or {}).get('tiles_known')})")
+
+
+TESTS = [p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11, p12, p13, p14, p15]

@@ -363,6 +363,13 @@ done:
     return print_reply(reply, out, outlen, status);
 }
 
+uint32_t control_master_ip(void)
+{
+    // Without the lock on purpose: a profile asks for this from profile_apply(), which runs while the lock is
+    // held. Two words, and the answer is a snapshot either way.
+    return (authority == AUTH_COMMANDED) ? authority_ip : 0;
+}
+
 int control_stream_begin(const char *object_id, const object_value_t *request, bool have_seq, double seq,
                          size_t length, uint32_t source_ip, char *out, size_t outlen)
 {

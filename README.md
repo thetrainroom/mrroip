@@ -48,6 +48,8 @@ w, h = dev.image_size()                                  # colour endpoints (pla
 dev.put_image(mmroip.image.pattern_rgb565("bars", w, h)) # PUT /objects/image, rgb565be
 dev.put_image(rect_pixels, x, y, w, h, base=image_id)    # a tile-aligned rectangle
 dev.update_image_rgb565(frame)                           # only the tiles that changed
+dev.control(mode="show", objects={"stream": {"port": 5004}})     # moving pictures: start
+mmroip.rtp.Sender(dev.ip, 5004, w, h, fps=5).send_frame(frame)   # RFC 4175 over RTP, paced
 mmroip.image.image_id(frame, w, h, 20)                   # what state.profile.image.id must report
 dev.patch_image(crc, [(x, y, w, h, bytes)])   # rectangles on the image with checksum crc, by hand
 dev.tx_bytes                            # request bytes sent so far

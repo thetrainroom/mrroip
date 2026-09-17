@@ -26,6 +26,9 @@ int control_stream_begin(const char *object_id, const object_value_t *request, b
 // Ends an upload started with 200 and writes its reply
 int control_stream_end(bool complete, bool have_seq, double seq, char *out, size_t outlen);
 
+// The address of the master holding authority now, in network byte order, or 0 if none (§11)
+uint32_t control_master_ip(void);
+
 // A rejection that never reached the parser (e.g. body_too_large), in the same shape
 void control_reject(const char *error, char *out, size_t outlen);
 
