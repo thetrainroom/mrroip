@@ -6,14 +6,13 @@ Python form of components/mrroip/src/control.c — the same checks in the same o
 message gets the same error from either implementation.
 """
 
-import json
 import logging
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 from typing import TYPE_CHECKING, Final
 
 from .. import protocol
-from .._types import Json, JsonObject, as_object
+from .._types import Json, JsonObject, as_object, parse_json
 from ..decl import is_number
 
 if TYPE_CHECKING:
@@ -64,7 +63,8 @@ class Control:
         """Timeout or release: dispatch on device_class (§11.3)."""
         nxt = self._rest_authority()
         if nxt == "autonomous":
-            self.profile.resume()                       # stationary with a programme: resume it
+            if not self.estop_latched:                  # a latched stop survives the loss of a master (§10.1)
+                self.profile.resume()                   # stationary with a programme: resume it
         elif self.profile.device_class != "passive":
             self.profile.come_to_rest()                 # mobile stops; stationary without one comes to rest
             if not self.estop_latched:
@@ -110,7 +110,7 @@ class Control:
         missing: str | None = None
         details: list[JsonObject] = []
         try:
-            msg: Json = json.loads(body)
+            msg: Json = parse_json(body)
         except (ValueError, UnicodeDecodeError):
             msg = None
 
@@ -156,10 +156,9 @@ class Control:
             return reject("stale_seq")
 
         # Objects are desired states that go with a profile mode; check all of them before applying any
-        objects = message.get("objects")
         checked: JsonObject = {}
-        if objects is not None:
-            desired = as_object(objects)
+        if "objects" in message:                    # present, even as null: cJSON sees it too
+            desired = as_object(message["objects"])
             if not is_profile or desired is None:
                 return reject("invalid_object_state" if is_profile else "unexpected_objects")
             for object_id, value in desired.items():

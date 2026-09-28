@@ -1561,6 +1561,190 @@
      }
     }
    ]
+  },
+  {
+   "name": "estop survives the loss of the master; the programme does not resume",
+   "class": "stationary",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "estop"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "mode": "estop",
+        "busy": false,
+        "profile": {
+         "blink_starts": 1
+        }
+       }
+      }
+     }
+    },
+    {
+     "advance_ms": 3000
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "mode": "estop",
+       "authority": "autonomous",
+       "busy": false,
+       "profile": {
+        "lamp": "off",
+        "blink_starts": 1
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "reset"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "mode": "off"
+       }
+      }
+     }
+    },
+    {
+     "advance_ms": 2500
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "autonomous",
+       "busy": true,
+       "profile": {
+        "blink_starts": 2
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "objects present as null are refused",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on",
+      "objects": null
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "invalid_object_state"
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "reset",
+      "objects": null
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "unexpected_objects"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "NaN and Infinity are not JSON",
+   "steps": [
+    {
+     "control": "{\"seq\":NaN,\"mode\":\"hold\"}",
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "malformed_json"
+      }
+     }
+    },
+    {
+     "udp": "{\"seq\":1,\"mode\":\"hold\",\"ts\":Infinity}",
+     "expect": {
+      "body": {
+       "accepted": false,
+       "error": "malformed_json"
+      }
+     }
+    },
+    {
+     "config": "{\"blink_period_ms\":NaN}",
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "malformed_json"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a number too large for a double is out of range",
+   "steps": [
+    {
+     "config": "{\"control_timeout_ms\":1e999}",
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "validation_failed",
+       "details": [
+        {
+         "key": "control_timeout_ms",
+         "reason": "out_of_range",
+         "min": 500,
+         "max": 30000
+        }
+       ]
+      }
+     }
+    },
+    {
+     "udp": "{\"seq\":1,\"mode\":\"on\",\"objects\":{\"level\":1e999}}",
+     "expect": {
+      "body": {
+       "accepted": false,
+       "error": "invalid_object_state",
+       "details": [
+        {
+         "key": "level",
+         "reason": "out_of_range"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200
+     }
+    }
+   ]
   }
  ]
 }

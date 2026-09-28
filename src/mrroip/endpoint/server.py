@@ -108,8 +108,10 @@ def _handler(endpoint: Endpoint) -> type[http.server.BaseHTTPRequestHandler]:
             if self.command == "PUT" and self.path.startswith("/objects/"):
                 r = endpoint.upload(self.path, self._headers(), length, self._peer(), self.rfile.read)
             elif length > protocol.BODY_MAX:
-                # refused unread: the core sees a body one byte too long, and the connection closes after the answer
+                # refused unread: the core sees a body one byte too long. Whatever it answers — 413, or 404 and
+                # 405 first — the body is still on the socket, so the connection closes after the answer.
                 r = endpoint.http(self.command, self.path, self._headers(), bytes(protocol.BODY_MAX + 1), self._peer())
+                r.close = True
             else:
                 body = self.rfile.read(length) if length else None
                 r = endpoint.http(self.command, self.path, self._headers(), body, self._peer())
@@ -197,7 +199,10 @@ class Server:
             except OSError:
                 port = None
                 continue
-            sock.sendto(self.endpoint.udp(data, IPv4Address(peer[0])), peer)
+            try:
+                sock.sendto(self.endpoint.udp(data, IPv4Address(peer[0])), peer)
+            except Exception:                        # one bad datagram must not end UDP control
+                log.exception("UDP control message from %s", peer[0])
 
     # -- discovery ----------------------------------------------------------------------------------------
 

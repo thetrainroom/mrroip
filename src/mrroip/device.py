@@ -29,11 +29,14 @@ class Device:
 
     def __init__(self, ip: ipaddress.IPv4Address | str, udp_port: int = protocol.UDP_PORT, timeout: float = 4.0,
                  seq_start: int | None = None, http_port: int | None = None) -> None:
-        """ip is an address, or text: "192.168.1.5", or "192.168.1.5:8080" for an endpoint serving HTTP on
-        another port (§5.3)."""
+        """ip is an address, or text: "192.168.1.5", a name such as "display.local", or either with ":8080"
+        for an endpoint serving HTTP on another port (§5.3). A name is resolved once, here."""
         if isinstance(ip, str):
             text, _, port = ip.partition(":")
-            ip = ipaddress.IPv4Address(text)
+            try:
+                ip = ipaddress.IPv4Address(text)
+            except ValueError:
+                ip = ipaddress.IPv4Address(socket.gethostbyname(text))
             if http_port is None and port:
                 http_port = int(port)
         http_port = 80 if http_port is None else http_port

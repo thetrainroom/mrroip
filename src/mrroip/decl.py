@@ -5,6 +5,7 @@ The declaration grammar shared by parameters and objects (MRROIP-1.md §7.2, §7
 against it. The Rust crate mrroip-proto has the same function (decl.rs); the two must agree.
 """
 
+import math
 from typing import TypeGuard
 
 from ._types import Json, JsonObject, as_list, as_object
@@ -43,7 +44,10 @@ def check(decl: JsonObject, value: Json) -> str | None:
 
 def _check_element(decl: JsonObject, t: str, value: Json) -> str | None:
     if t in ("int", "float"):
-        if not is_number(value) or (t == "int" and value != int(value)):
+        if not is_number(value) or math.isnan(value):
+            return "wrong_type"
+        # an infinity is out of range rather than the wrong type, as in the C core (floor(inf) == inf)
+        if t == "int" and isinstance(value, float) and math.isfinite(value) and not value.is_integer():
             return "wrong_type"
         if ("min" in decl and value < decl["min"]) or ("max" in decl and value > decl["max"]):
             return "out_of_range"

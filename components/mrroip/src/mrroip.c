@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "cJSON.h"
 #include "esp_err.h"
@@ -26,9 +27,42 @@ static const char *TAG = "mrroip";
 // Wi-Fi credentials and settings under this namespace. Read once, then erased.
 #define LEGACY_NAMESPACE "mmroip"
 
-// A device updated from firmware older than the rename keeps what it stored: when the current namespace holds no
-// configuration yet, every entry of the legacy one is copied over, and the legacy one erased once the copy is
-// committed. Runs before any task starts, so writing here does not bypass the store's queue (§8.3).
+// A device updated from firmware older than the rename keeps what it stored. The keys are listed first and copied
+// after, since writing while an iterator is open can move NVS pages under it. cfg_ver goes last: a device counts
+// as migrated only once it is there, so a copy that fails part-way is tried again at the next start, and the legacy
+// namespace is erased only after everything arrived. Runs before any task starts, so writing here does not bypass
+// the store's queue (§8.3).
+#define LEGACY_KEYS_MAX 48
+#define CONFIG_VERSION_KEY "cfg_ver"
+
+typedef struct {
+    char key[NVS_KEY_NAME_MAX_SIZE];
+    nvs_type_t type;
+} legacy_entry_t;
+
+static bool copy_entry(nvs_handle_t from, nvs_handle_t to, const legacy_entry_t *e)
+{
+    if (e->type == NVS_TYPE_I32) {
+        int32_t v;
+        return nvs_get_i32(from, e->key, &v) == ESP_OK && nvs_set_i32(to, e->key, v) == ESP_OK;
+    }
+    if (e->type == NVS_TYPE_U32) {
+        uint32_t v;
+        return nvs_get_u32(from, e->key, &v) == ESP_OK && nvs_set_u32(to, e->key, v) == ESP_OK;
+    }
+    if (e->type == NVS_TYPE_STR) {
+        size_t len = 0;
+        if (nvs_get_str(from, e->key, NULL, &len) != ESP_OK) {
+            return false;
+        }
+        char *v = malloc(len);
+        bool ok = v && nvs_get_str(from, e->key, v, &len) == ESP_OK && nvs_set_str(to, e->key, v) == ESP_OK;
+        free(v);
+        return ok;
+    }
+    return false;                       // the core never stored other types
+}
+
 static void migrate_legacy_namespace(void)
 {
     nvs_handle_t current;
@@ -36,46 +70,61 @@ static void migrate_legacy_namespace(void)
         return;
     }
     uint32_t version;
-    char ssid[33];
-    size_t ssid_len = sizeof(ssid);
-    bool configured = nvs_get_u32(current, "cfg_ver", &version) == ESP_OK ||
-                      nvs_get_str(current, "wifi_ssid", ssid, &ssid_len) == ESP_OK;
     nvs_handle_t legacy;
-    if (configured || nvs_open(LEGACY_NAMESPACE, NVS_READWRITE, &legacy) != ESP_OK) {
-        nvs_close(current);
+    // read-only first: opening read-write would create the namespace on a device that never had one
+    if (nvs_get_u32(current, CONFIG_VERSION_KEY, &version) == ESP_OK ||
+        nvs_open(LEGACY_NAMESPACE, NVS_READONLY, &legacy) != ESP_OK) {
+        nvs_close(current);             // migrated, or nothing to migrate
         return;
     }
-    int copied = 0, failed = 0;
+
+    static legacy_entry_t entries[LEGACY_KEYS_MAX];
+    size_t count = 0;
+    bool listed = true;
     nvs_iterator_t it = NULL;
-    esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, LEGACY_NAMESPACE, NVS_TYPE_ANY, &it);
-    while (err == ESP_OK) {
+    for (esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, LEGACY_NAMESPACE, NVS_TYPE_ANY, &it);
+         err == ESP_OK; err = nvs_entry_next(&it)) {
         nvs_entry_info_t info;
         nvs_entry_info(it, &info);
-        bool ok = true;
-        if (info.type == NVS_TYPE_I32) {
-            int32_t v;
-            ok = nvs_get_i32(legacy, info.key, &v) == ESP_OK && nvs_set_i32(current, info.key, v) == ESP_OK;
-        } else if (info.type == NVS_TYPE_U32) {
-            uint32_t v;
-            ok = nvs_get_u32(legacy, info.key, &v) == ESP_OK && nvs_set_u32(current, info.key, v) == ESP_OK;
-        } else if (info.type == NVS_TYPE_STR) {
-            char v[128];
-            size_t len = sizeof(v);
-            ok = nvs_get_str(legacy, info.key, v, &len) == ESP_OK && nvs_set_str(current, info.key, v) == ESP_OK;
-        } else {
-            ok = false;                 // the core never stored other types
+        if (count == LEGACY_KEYS_MAX) {
+            listed = false;
+            break;
         }
-        ok ? copied++ : failed++;
-        err = nvs_entry_next(&it);
+        strlcpy(entries[count].key, info.key, sizeof(entries[count].key));
+        entries[count].type = info.type;
+        count++;
     }
     nvs_release_iterator(it);
+
+    int copied = 0, failed = listed ? 0 : 1;
+    const legacy_entry_t *version_entry = NULL;
+    for (size_t i = 0; i < count; i++) {
+        if (strcmp(entries[i].key, CONFIG_VERSION_KEY) == 0) {
+            version_entry = &entries[i];
+            continue;
+        }
+        copy_entry(legacy, current, &entries[i]) ? copied++ : failed++;
+    }
     if (failed == 0 && nvs_commit(current) == ESP_OK) {
-        nvs_erase_all(legacy);
-        nvs_commit(legacy);
+        // last: from here on the device counts as migrated
+        uint32_t zero_version = 0;
+        bool marked = version_entry ? copy_entry(legacy, current, version_entry)
+                                    : nvs_set_u32(current, CONFIG_VERSION_KEY, zero_version) == ESP_OK;
+        nvs_handle_t erase;
+        if (marked && nvs_commit(current) == ESP_OK) {
+            copied += version_entry ? 1 : 0;
+            if (nvs_open(LEGACY_NAMESPACE, NVS_READWRITE, &erase) == ESP_OK) {
+                nvs_erase_all(erase);
+                nvs_commit(erase);
+                nvs_close(erase);
+            }
+        } else {
+            failed++;
+        }
     }
     if (copied || failed) {
         ESP_LOGW(TAG, "%d settings moved from namespace '%s' to '%s'%s", copied, LEGACY_NAMESPACE, MRROIP_TOKEN,
-                 failed ? ", some failed: the old namespace is kept" : "");
+                 failed ? "; some failed, trying again at the next start" : "");
     }
     nvs_close(legacy);
     nvs_close(current);

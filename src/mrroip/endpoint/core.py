@@ -155,9 +155,9 @@ class Endpoint:
             if path == "/control":
                 status, reply = self.control.apply(body or b"", source_ip)
                 return Response(status, reply)
+            self.note_traffic()                     # /config traffic keeps announcements silenced (§6.1)
             if method == "GET":
                 return Response(200, self.params.config_json(self.device_id))
-            self.note_traffic()
             reply = self.params.apply(body or b"", self.device_id)
             for name in reply.changed:
                 if name == "device_name":

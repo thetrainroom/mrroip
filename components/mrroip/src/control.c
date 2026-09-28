@@ -76,7 +76,9 @@ static void master_lost(const char *why)
     const profile_info_t *info = profile_info();
     authority_t next = rest_authority();
     if (next == AUTH_AUTONOMOUS) {
-        profile_resume();           // stationary with a programme: resume it
+        if (!estop_latched) {       // a latched stop survives the loss of a master (§10.1): nothing resumes under it
+            profile_resume();       // stationary with a programme: resume it
+        }
     } else if (strcmp(info->device_class, "passive") != 0) {
         profile_come_to_rest();     // mobile stops; stationary without a programme comes to rest
         if (!estop_latched) {       // a latched stop stays visible as the mode

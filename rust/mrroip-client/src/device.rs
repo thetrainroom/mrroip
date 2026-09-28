@@ -4,7 +4,7 @@
 //! accepts comes from its `/definition`.
 
 use std::fmt;
-use std::net::{Ipv4Addr, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs, UdpSocket};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -66,13 +66,23 @@ pub struct Device {
 }
 
 impl Device {
-    /// `addr` is `ip` or `ip:port` (§5.3)
+    /// `addr` is an address or a name, such as `display.local`, with `:port` for an endpoint not serving HTTP on
+    /// 80 (§5.3). A name is resolved once, here.
     pub fn new(addr: &str) -> Result<Device> {
-        let (ip, port) = match addr.split_once(':') {
-            Some((ip, port)) => (ip, port.parse().map_err(|_| protocol(0, "bad port"))?),
+        let (host, port) = match addr.split_once(':') {
+            Some((host, port)) => (host, port.parse().map_err(|_| protocol(0, "bad port"))?),
             None => (addr, HTTP_PORT),
         };
-        let ip: Ipv4Addr = ip.parse().map_err(|_| protocol(0, "not an IPv4 address"))?;
+        let ip = match host.parse::<Ipv4Addr>() {
+            Ok(ip) => ip,
+            Err(_) => (host, port)
+                .to_socket_addrs()?
+                .find_map(|a| match a {
+                    SocketAddr::V4(v4) => Some(*v4.ip()),
+                    SocketAddr::V6(_) => None,
+                })
+                .ok_or_else(|| protocol(0, &format!("{host} has no IPv4 address")))?,
+        };
         Ok(Device::at(ip, port))
     }
 
@@ -197,16 +207,28 @@ impl Device {
         self.control_udp_on(&socket, msg)
     }
 
-    /// Over a socket the caller keeps, e.g. for a stream of setpoints
+    /// Over a socket the caller keeps, e.g. for a stream of setpoints. Only the reply to this message counts: a
+    /// late answer to an earlier one, still queued on the socket, is skipped by its `ack_seq`.
     pub fn control_udp_on(&self, socket: &UdpSocket, msg: ControlMessage) -> Result<ControlResponse> {
-        let data = serde_json::to_vec(&self.stamp(msg)).expect("JSON");
-        socket.set_read_timeout(Some(self.timeout))?;
+        let msg = self.stamp(msg);
+        let data = serde_json::to_vec(&msg).expect("JSON");
         socket.send_to(&data, (self.ip, self.udp_port))?;
+        let deadline = Instant::now() + self.timeout;
         let mut buf = [0u8; 4096];
         loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(Error::Io(std::io::ErrorKind::TimedOut.into()));
+            }
+            socket.set_read_timeout(Some(left))?;
             let (n, from) = socket.recv_from(&mut buf)?;
-            if from.ip() == self.ip {
-                return serde_json::from_slice(&buf[..n]).map_err(|e| protocol(0, &format!("UDP reply: {e}")));
+            if from.ip() != self.ip {
+                continue;
+            }
+            let reply: ControlResponse =
+                serde_json::from_slice(&buf[..n]).map_err(|e| protocol(0, &format!("UDP reply: {e}")))?;
+            if reply.ack_seq.as_ref().and_then(|s| s.as_u64()) == Some(msg.seq) {
+                return Ok(reply);
             }
         }
     }
@@ -246,7 +268,28 @@ mod tests {
         assert_eq!((d.http_port, d.host()), (80, "10.0.0.5".to_string()));
         let d = Device::new("10.0.0.5:8080").unwrap();
         assert_eq!((d.http_port, d.host()), (8080, "10.0.0.5:8080".to_string()));
-        assert!(Device::new("host.local").is_err());
+        assert!(Device::new("no-such-host.invalid").is_err());
+        assert_eq!(Device::new("localhost:8080").unwrap().ip, Ipv4Addr::LOCALHOST);
+    }
+
+    #[test]
+    fn a_late_reply_is_not_taken_for_the_next() {
+        let endpoint = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut dev = Device::at(Ipv4Addr::LOCALHOST, 80);
+        dev.udp_port = endpoint.local_addr().unwrap().port();
+        dev.timeout = Duration::from_secs(2);
+        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let answer = std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            let (n, from) = endpoint.recv_from(&mut buf).unwrap();
+            let seq = serde_json::from_slice::<ControlMessage>(&buf[..n]).unwrap().seq;
+            // a stale reply to an earlier message first, then the real one
+            endpoint.send_to(format!(r#"{{"ack_seq":{},"accepted":false,"error":"stale"}}"#, seq - 1).as_bytes(), from).unwrap();
+            endpoint.send_to(format!(r#"{{"ack_seq":{seq},"accepted":true}}"#).as_bytes(), from).unwrap();
+        });
+        let reply = dev.control_udp_on(&socket, ControlMessage::mode("hold")).unwrap();
+        answer.join().unwrap();
+        assert!(reply.accepted);
     }
 
     #[test]

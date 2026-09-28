@@ -9,6 +9,7 @@ lamp is a variable; its changes are logged.
 import logging
 from typing import Final
 
+from .. import decl as grammar
 from .._types import Json, JsonObject
 from .params import Param
 from .profile import Core, Profile
@@ -112,9 +113,7 @@ class Reference(Profile):
             return "not_commandable"
         if object_id != "level":
             return "unknown_object"
-        if not isinstance(value, (int, float)) or isinstance(value, bool) or value != int(value):
-            return "wrong_type"
-        return None if 0 <= value <= 100 else "out_of_range"
+        return grammar.check(LEVEL, value)
 
     def apply(self, mode: str, objects: JsonObject) -> None:
         if "level" in objects:

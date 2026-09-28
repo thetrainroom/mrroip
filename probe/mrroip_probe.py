@@ -1,6 +1,6 @@
+#!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Thierry Gschwind
 # SPDX-License-Identifier: Apache-2.0
-#!/usr/bin/env python3
 """
 mrroip_probe.py — core conformance suite for an MRRoIP endpoint.
 

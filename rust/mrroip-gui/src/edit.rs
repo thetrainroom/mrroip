@@ -23,6 +23,7 @@ impl Field {
     pub fn new(value: Value) -> Field {
         let text = match &value {
             Value::String(s) => s.clone(),
+            Value::Null => String::new(), // no value yet: an empty field, not the word "null"
             other => other.to_string(),
         };
         Field { value, text, invalid: false, changed: false }
@@ -37,85 +38,98 @@ impl Field {
     }
 }
 
-/// Draws the widget for `decl` and edits `field`. Returns true when the user changed it.
+/// Draws the widget for `decl` and edits `field`. Returns true when the user changed it. The value is written
+/// only on a change the user made: drawing a field never alters it, so a value that arrived as 5 for a float, or
+/// no value at all, stays as it came until someone edits it.
 pub fn field_ui(ui: &mut Ui, id: &str, decl: &Decl, def: &Definition, field: &mut Field, enabled: bool) -> bool {
     let (t, list) = decl.value_type();
     let unit = decl.unit.as_deref().map(|u| format!(" {u}")).unwrap_or_default();
-    let before = field.value.clone();
-    ui.add_enabled_ui(enabled, |ui| match (t, list) {
-        (ValueType::Int, false) => {
-            let mut n = field.value.as_f64().unwrap_or(0.0).round() as i64;
-            match (decl.min_f64(), decl.max_f64()) {
-                (Some(lo), Some(hi)) if hi - lo <= 10_000.0 => {
-                    ui.add(Slider::new(&mut n, lo as i64..=hi as i64).suffix(unit));
-                }
-                (lo, hi) => {
-                    let range = lo.map_or(i64::MIN, |v| v as i64)..=hi.map_or(i64::MAX, |v| v as i64);
-                    ui.add(DragValue::new(&mut n).range(range).suffix(unit));
-                }
-            }
-            field.value = n.into();
-        }
-        (ValueType::Float, false) => {
-            let mut f = field.value.as_f64().unwrap_or(0.0);
-            match (decl.min_f64(), decl.max_f64()) {
-                (Some(lo), Some(hi)) => ui.add(Slider::new(&mut f, lo..=hi).suffix(unit)),
-                _ => ui.add(DragValue::new(&mut f).speed(0.01).suffix(unit)),
-            };
-            field.value = serde_json::Number::from_f64(f).map(Value::Number).unwrap_or(Value::Null);
-        }
-        (ValueType::Bool, false) => {
-            let mut b = field.value.as_bool().unwrap_or(false);
-            ui.checkbox(&mut b, "");
-            field.value = b.into();
-        }
-        (ValueType::Enum | ValueType::String, false) if decl.values.is_some() => {
-            let current = field.value.as_str().unwrap_or("").to_string();
-            let labels = def.ui.get(decl.key()).and_then(|u| u.value_labels.clone()).unwrap_or_default();
-            let label = |v: &str| labels.get(v).cloned().unwrap_or_else(|| v.to_string());
-            let mut selected = current.clone();
-            ComboBox::from_id_salt(id).selected_text(label(&current)).show_ui(ui, |ui| {
-                for v in decl.values.iter().flatten() {
-                    ui.selectable_value(&mut selected, v.clone(), label(v));
-                }
-            });
-            field.value = selected.into();
-        }
-        (ValueType::String | ValueType::Resource, false) => {
-            let mut edit = TextEdit::singleline(&mut field.text).desired_width(220.0);
-            if let Some(max) = decl.max_len {
-                edit = edit.char_limit(max as usize);
-            }
-            ui.add(edit);
-            field.value = Value::String(field.text.clone());
-        }
-        _ => {
-            // lists, records and unknown types: JSON text
-            let response = ui.add(TextEdit::multiline(&mut field.text).code_editor().desired_rows(1).desired_width(320.0));
-            if response.changed() {
-                match serde_json::from_str(&field.text) {
-                    Ok(v) => {
-                        field.value = v;
-                        field.invalid = false;
+    let changed = ui
+        .add_enabled_ui(enabled, |ui| match (t, list) {
+            (ValueType::Int, false) => {
+                let mut n = field.value.as_f64().unwrap_or(0.0).round() as i64;
+                let response = match (decl.min_f64(), decl.max_f64()) {
+                    (Some(lo), Some(hi)) if hi - lo <= 10_000.0 => ui.add(Slider::new(&mut n, lo as i64..=hi as i64).suffix(unit)),
+                    (lo, hi) => {
+                        let range = lo.map_or(i64::MIN, |v| v as i64)..=hi.map_or(i64::MAX, |v| v as i64);
+                        ui.add(DragValue::new(&mut n).range(range).suffix(unit))
                     }
-                    Err(_) => field.invalid = true,
+                };
+                if response.changed() {
+                    field.value = n.into();
                 }
+                response.changed()
             }
-            if field.invalid {
-                ui.colored_label(Color32::RED, "not JSON");
+            (ValueType::Float, false) => {
+                let mut f = field.value.as_f64().unwrap_or(0.0);
+                let response = match (decl.min_f64(), decl.max_f64()) {
+                    (Some(lo), Some(hi)) => ui.add(Slider::new(&mut f, lo..=hi).suffix(unit)),
+                    _ => ui.add(DragValue::new(&mut f).speed(0.01).suffix(unit)),
+                };
+                if response.changed() {
+                    field.value = serde_json::Number::from_f64(f).map(Value::Number).unwrap_or(Value::Null);
+                }
+                response.changed()
             }
-        }
-    });
-    if field.value != before {
-        if let Value::String(s) = &field.value {
-            field.text = s.clone();
-        } else if !matches!(decl.value_type(), (ValueType::Other(_) | ValueType::Record, _) | (_, true)) {
-            field.text = field.value.to_string();
-        }
+            (ValueType::Bool, false) => {
+                let mut b = field.value.as_bool().unwrap_or(false);
+                let response = ui.checkbox(&mut b, "");
+                if response.changed() {
+                    field.value = b.into();
+                }
+                response.changed()
+            }
+            (ValueType::Enum | ValueType::String, false) if decl.values.is_some() => {
+                let current = field.value.as_str().unwrap_or("").to_string();
+                let labels = def.ui.get(decl.key()).and_then(|u| u.value_labels.clone()).unwrap_or_default();
+                let label = |v: &str| labels.get(v).cloned().unwrap_or_else(|| v.to_string());
+                let mut selected = current.clone();
+                ComboBox::from_id_salt(id).selected_text(label(&current)).show_ui(ui, |ui| {
+                    for v in decl.values.iter().flatten() {
+                        ui.selectable_value(&mut selected, v.clone(), label(v));
+                    }
+                });
+                if selected != current {
+                    field.text = selected.clone();
+                    field.value = selected.into();
+                    return true;
+                }
+                false
+            }
+            (ValueType::String | ValueType::Resource, false) => {
+                let mut edit = TextEdit::singleline(&mut field.text).desired_width(220.0);
+                if let Some(max) = decl.max_len {
+                    edit = edit.char_limit(max as usize);
+                }
+                let response = ui.add(edit);
+                if response.changed() {
+                    field.value = Value::String(field.text.clone());
+                }
+                response.changed()
+            }
+            _ => {
+                // lists, records and unknown types: JSON text
+                let response = ui.add(TextEdit::multiline(&mut field.text).code_editor().desired_rows(1).desired_width(320.0));
+                if response.changed() {
+                    match serde_json::from_str(&field.text) {
+                        Ok(v) => {
+                            field.value = v;
+                            field.invalid = false;
+                        }
+                        Err(_) => field.invalid = true,
+                    }
+                }
+                if field.invalid {
+                    ui.colored_label(Color32::RED, "not JSON");
+                }
+                response.changed()
+            }
+        })
+        .inner;
+    if changed {
         field.changed = true;
-        return true;
     }
-    false
+    changed
 }
 
 /// A value for display: strings bare, everything else as compact JSON

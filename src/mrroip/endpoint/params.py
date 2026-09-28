@@ -9,14 +9,13 @@ stored only when the write says `persist`.
 
 import copy
 import dataclasses
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Final
 
 from .. import decl as grammar
 from .. import protocol
-from .._types import Json, JsonObject, as_object
+from .._types import Json, JsonObject, as_object, parse_json
 from .store import Store
 
 CONFIG_VERSION_KEY: Final = "cfg_ver"
@@ -123,7 +122,7 @@ class Params:
     def apply(self, body: bytes, device_id: str) -> ConfigReply:
         """POST /config (§8.2): validate every key first, then apply all of them or none."""
         try:
-            root = as_object(json.loads(body))
+            root = as_object(parse_json(body))
         except (ValueError, UnicodeDecodeError):
             root = None
         if root is None:
