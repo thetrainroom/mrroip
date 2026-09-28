@@ -27,6 +27,8 @@ import socket
 import sys
 import time
 import urllib.request
+from collections.abc import Callable
+from ipaddress import IPv4Address
 
 from mrroip_lib import Res, mrroip            # mrroip_lib makes the package importable
 from mrroip.discovery import NotifyListener, mdns_browse, ssdp_search, whois
@@ -47,7 +49,7 @@ def uptime_ms(dev):
         return None
 
 
-def wait_until(pred, limit, poll=0.25):
+def wait_until(pred: Callable[[], object], limit: float, poll: float = 0.25) -> float | None:
     t0 = time.monotonic()
     while time.monotonic() - t0 < limit:
         if pred():
@@ -72,7 +74,7 @@ def restart_config(dev, parameter, value):
 
 
 def restart_serial(port):
-    import serial
+    import serial  # pyright: ignore[reportMissingModuleSource]  # pyserial, only for --reboot serial:PORT
     s = serial.Serial(port, 115200, timeout=0.1)       # opening the port pulses the auto-reset circuit
     t = time.monotonic()
     time.sleep(0.5)
@@ -106,9 +108,9 @@ def observe_boot(dev, listener, trigger, label):
         time.sleep(1.0)
     byes = listener.since(t0 - 2.0, dev.ip, BYEBYE)
     alives = listener.since(t0, dev.ip, ALIVE)
-    timeline = [(t0, "restart triggered")] + [(e["t"], "ssdp:byebye") for e in byes]
+    timeline = [(t0, "restart triggered")] + [(e.t, "ssdp:byebye") for e in byes]
     timeline += [(down, "HTTP stops answering"), (up, "HTTP answers again, uptime started over")]
-    timeline += [(e["t"], f"ssdp:alive #{i + 1}") for i, e in enumerate(alives)]
+    timeline += [(e.t, f"ssdp:alive #{i + 1}") for i, e in enumerate(alives)]
     for t, what in sorted((x for x in timeline if x[0] is not None), key=lambda x: x[0]):
         print(f"  {fmt(t, t0)}  {what}")
     return {"t0": t0, "down": down, "up": up, "byebye": byes, "alive": alives}
@@ -122,7 +124,7 @@ def d01_byebye(boot, method):
         return r.skipped(f"{method} is a hard reset: nothing can be sent")
     if not boot["byebye"]:
         return r.failed("no ssdp:byebye seen")
-    lead = (boot["down"] - boot["byebye"][0]["t"]) if boot["down"] else None
+    lead = (boot["down"] - boot["byebye"][0].t) if boot["down"] else None
     return r.passed(f"{len(boot['byebye'])} seen" + (f", {lead:.2f} s before HTTP stopped" if lead is not None else ""))
 
 
@@ -142,8 +144,8 @@ def d03_startup(boot):
     if len(alives) < STARTUP_ANNOUNCEMENTS:
         return r.failed(f"{len(alives)} ssdp:alive seen after the restart, §6.1 wants {STARTUP_ANNOUNCEMENTS}")
     first = alives[:STARTUP_ANNOUNCEMENTS]
-    gaps = [round((b["t"] - a["t"]) * 1000) for a, b in zip(first, first[1:])]
-    after_up = (first[0]["t"] - boot["up"]) if boot["up"] else None
+    gaps = [round((b.t - a.t) * 1000) for a, b in zip(first, first[1:])]
+    after_up = (first[0].t - boot["up"]) if boot["up"] else None
     return r.passed(f"gaps {gaps} ms" + (f", first {after_up:+.2f} s from HTTP up" if after_up is not None else ""))
 
 
@@ -151,7 +153,7 @@ def d04_headers(dev, alive):
     r = Res("D-4", "announcement headers")
     if not alive:
         return r.skipped("no announcement to inspect")
-    h, dfn, bad = alive[-1]["headers"], dev.dfn, []
+    h, dfn, bad = alive[-1].headers, dev.dfn, []
     for suffix, key in (("ID", "device_id"), ("NAME", "device_name"), ("TYPE", "device_type"), ("CLASS", "device_class")):
         if h.get(HEADER_PREFIX + suffix) != dfn.get(key):
             bad.append(f"{HEADER_PREFIX}{suffix}={h.get(HEADER_PREFIX + suffix)!r} != {dfn.get(key)!r}")
@@ -193,22 +195,24 @@ def d06_search_all(dev, iface):
 
 def d07_whois(dev, iface):
     r = Res("D-7", "whois, unicast and broadcast")
-    uni = whois(dev.ip, iface=iface).get(dev.ip, {})
-    broad = whois(iface=iface).get(dev.ip, {})
-    problems = []
+    uni = whois(dev.ip, iface=iface).get(dev.ip)
+    broad = whois(iface=iface).get(dev.ip)
+    problems: list[str] = []
     for label, reply in (("unicast", uni), ("broadcast", broad)):
-        if not reply:
+        if reply is None:
             problems.append(f"no {label} reply")
-        elif reply.get("id") != dev.dfn["device_id"] or reply.get("ip") != dev.ip:
-            problems.append(f"{label} reply id={reply.get('id')} ip={reply.get('ip')}")
-    return r.failed("; ".join(problems)) if problems else r.passed(f"both answered as {uni.get('name')!r} at {uni.get('ip')}")
+        elif reply.device_id != dev.dfn["device_id"] or reply.ip != dev.ip:
+            problems.append(f"{label} reply id={reply.device_id} ip={reply.ip}")
+    if problems or uni is None:
+        return r.failed("; ".join(problems))
+    return r.passed(f"both answered as {uni.name!r} at {uni.ip}")
 
 
 def d08_mdns_host(dev):
     r = Res("D-8", "mDNS host name")
     name = f"{dev.dfn['device_name']}.local"
     try:
-        ip = socket.gethostbyname(name)
+        ip = IPv4Address(socket.gethostbyname(name))
     except Exception as e:
         return r.failed(f"{name} did not resolve: {e}")
     return r.passed(f"{name} -> {ip}") if ip == dev.ip else r.failed(f"{name} -> {ip}, expected {dev.ip}")
@@ -219,14 +223,14 @@ def d09_mdns_service(dev, iface):
     found = mdns_browse(iface=iface).get(dev.ip)
     if not found:
         return r.failed("the _mrroip._tcp browse found nothing at this address")
-    txt, dfn, bad = found["txt"], dev.dfn, []
+    txt, dfn, bad = found.txt, dev.dfn, []
     for key, field in (("id", "device_id"), ("name", "device_name"), ("type", "device_type"),
                        ("class", "device_class"), ("fw", "firmware")):
         if txt.get(key) != dfn.get(field):
             bad.append(f"TXT {key}={txt.get(key)!r} != {dfn.get(field)!r}")
-    if found["port"] != 80:
-        bad.append(f"port {found['port']}")
-    return r.failed("; ".join(bad)) if bad else r.passed(f"{found['instance']} on {found['host']}:{found['port']}")
+    if found.port != dev.http_port:
+        bad.append(f"port {found.port}")
+    return r.failed("; ".join(bad)) if bad else r.passed(f"{found.instance} on {found.host}:{found.port}")
 
 
 def d10_rename(dev, listener, iface):
@@ -237,10 +241,11 @@ def d10_rename(dev, listener, iface):
     if code != 200:
         return r.failed(f"rename returned {code}")
     try:
-        seen = wait_until(lambda: any(e["headers"].get(HEADER_PREFIX + "NAME") == new
+        seen = wait_until(lambda: any(e.headers.get(HEADER_PREFIX + "NAME") == new
                                       for e in listener.since(t, dev.ip, ALIVE)), 5, poll=0.1)
         search_name = ssdp_search(timeout=4.0, iface=iface).get(dev.ip, {}).get(HEADER_PREFIX + "NAME")
-        mdns_name = (mdns_browse(iface=iface).get(dev.ip) or {}).get("txt", {}).get("name")
+        service = mdns_browse(iface=iface).get(dev.ip)
+        mdns_name = service.txt.get("name") if service else None
     finally:
         dev.set_config(device_name=original, persist=False)
     problems = []
@@ -250,7 +255,9 @@ def d10_rename(dev, listener, iface):
         problems.append(f"search still answers as {search_name!r}")
     if mdns_name != new:
         problems.append(f"mDNS TXT name is {mdns_name!r}")
-    return r.failed("; ".join(problems)) if problems else r.passed(f"announced after {seen - t:.2f} s; search and mDNS agree")
+    if problems or seen is None:
+        return r.failed("; ".join(problems))
+    return r.passed(f"announced after {seen - t:.2f} s; search and mDNS agree")
 
 
 def d11_periodic(dev, listener):
@@ -274,22 +281,23 @@ def scan(iface):
     ssdp = ssdp_search(timeout=5.0, iface=iface)
     who = whois(iface=iface)
     mdns = mdns_browse(iface=iface)
-    ips = sorted(set(ssdp) | set(who) | set(mdns), key=lambda ip: tuple(int(x) for x in ip.split(".")))
+    ips = sorted(set(ssdp) | set(who) | set(mdns))
     if not ips:
         print("Nothing found. If a device is up, multicast and broadcast are probably blocked here.")
         return 1
     print(f"\n{'address':16s} {'name':18s} {'type':10s} {'class':11s} SSDP  whois  mDNS  device_id")
     status = 0
     for ip in ips:
-        s, w, m = ssdp.get(ip, {}), who.get(ip, {}), (mdns.get(ip) or {}).get("txt", {})
-        ids = {x for x in (s.get(HEADER_PREFIX + "ID"), w.get("id"), m.get("id")) if x}
-        name = s.get(HEADER_PREFIX + "NAME") or w.get("name") or m.get("name") or "?"
-        kind = s.get(HEADER_PREFIX + "TYPE") or w.get("type") or m.get("type") or "?"
-        cls = s.get(HEADER_PREFIX + "CLASS") or w.get("class") or m.get("class") or "?"
+        service, w = mdns.get(ip), who.get(ip)
+        s, m = ssdp.get(ip, {}), service.txt if service else {}
+        ids = {x for x in (s.get(HEADER_PREFIX + "ID"), w and w.device_id, m.get("id")) if x}
+        name = s.get(HEADER_PREFIX + "NAME") or (w and w.name) or m.get("name") or "?"
+        kind = s.get(HEADER_PREFIX + "TYPE") or (w and w.device_type) or m.get("type") or "?"
+        cls = s.get(HEADER_PREFIX + "CLASS") or (w and w.device_class) or m.get("class") or "?"
         mark = lambda present: " yes " if present else "  —  "
         agree = "" if len(ids) <= 1 else "   <- mechanisms disagree"
         status |= 1 if agree else 0
-        print(f"{ip:16s} {name[:18]:18s} {kind[:10]:10s} {cls[:11]:11s} {mark(s)} {mark(w)}  {mark(m)} "
+        print(f"{str(ip):16s} {name[:18]:18s} {kind[:10]:10s} {cls[:11]:11s} {mark(s)} {mark(w)}  {mark(m)} "
               f"{', '.join(sorted(ids))}{agree}")
     return status
 
@@ -299,10 +307,10 @@ def scan(iface):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scan", action="store_true")
-    ap.add_argument("--host")
+    ap.add_argument("--host", help="address, or address:port for an endpoint not serving HTTP on 80")
     ap.add_argument("--reboot", default="none", help="config | serial:PORT | manual | none")
     ap.add_argument("--periodic", action="store_true")
-    ap.add_argument("--iface")
+    ap.add_argument("--iface", type=IPv4Address, help="the local IPv4 address to search from")
     args = ap.parse_args()
 
     if args.scan or not args.host:

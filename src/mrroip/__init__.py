@@ -22,7 +22,8 @@ Standard library only; Pillow is needed only by mrroip.image.text() and mrroip.i
 
 from . import image, protocol, rtp
 from .device import Device
-from .discovery import NotifyListener, mdns_browse, ssdp_search, whois
+from .discovery import MdnsService, NotifyEvent, NotifyListener, WhoisReply, mdns_browse, ssdp_search, whois
 
-__all__ = ["Device", "NotifyListener", "mdns_browse", "ssdp_search", "whois", "image", "protocol", "rtp"]
-__version__ = "0.1.0"
+__all__ = ["Device", "MdnsService", "NotifyEvent", "NotifyListener", "WhoisReply", "mdns_browse", "ssdp_search",
+           "whois", "image", "protocol", "rtp"]
+__version__ = "0.2.0"

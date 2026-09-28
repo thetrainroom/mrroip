@@ -73,7 +73,7 @@ def main():
         if not device.control(mode="show", objects={"stream": {"port": args.port}}).get("accepted"):
             print("the endpoint did not start a stream")
             return 1
-        sender = mrroip.rtp.Sender(args.host, args.port, width, height, "rgb565be", fps=args.fps)
+        sender = mrroip.rtp.Sender(device.ip, args.port, width, height, "rgb565be", fps=args.fps)
     else:
         device.put_image(back)          # a known starting picture, so the first tiles have a base
 

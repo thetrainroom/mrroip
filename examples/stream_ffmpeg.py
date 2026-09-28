@@ -66,10 +66,11 @@ def main():
         return 1
     before = device.pstate().get("stream", {})
 
-    sender = mrroip.rtp.Sender(args.host, args.port, width, height, "rgb565be", fps=args.fps)
+    sender = mrroip.rtp.Sender(device.ip, args.port, width, height, "rgb565be", fps=args.fps)
     command = ffmpeg_command(args, width, height)
     print(" ".join(command))
     ffmpeg = subprocess.Popen(command, stdout=subprocess.PIPE)
+    assert ffmpeg.stdout is not None             # stdout=PIPE
     started = time.time()
     try:
         while True:

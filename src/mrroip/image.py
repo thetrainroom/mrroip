@@ -18,26 +18,29 @@ changed_tiles() finds what to send.
 import base64
 import zlib
 
+from ._types import JsonObject, Rect
 
-def image_size(definition):
+
+def image_size(definition: JsonObject) -> tuple[int, int]:
     """(width, height) of the "image" object in a /definition document."""
-    for obj in definition.get("objects", []):
+    objects: list[JsonObject] = definition.get("objects", [])
+    for obj in objects:
         if obj.get("id") == "image":
             return obj["profile"]["width_px"], obj["profile"]["height_px"]
     raise ValueError("this endpoint has no image object")
 
 
-def encode(data):
+def encode(data: bytes) -> str:
     """Base64 text for an image object's desired state."""
     return base64.b64encode(data).decode()
 
 
-def crc32(data):
+def crc32(data: bytes) -> str:
     """The checksum a display reports for its image (state.profile.image.crc32)."""
     return "%08x" % zlib.crc32(data)
 
 
-def crop(data, width, x, y, w, h):
+def crop(data: bytes, width: int, x: int, y: int, w: int, h: int) -> bytes:
     """The w×h rectangle at (x, y) of an image, as an image of its own."""
     stride, rstride = (width + 7) // 8, (w + 7) // 8
     out = bytearray(rstride * h)
@@ -48,7 +51,7 @@ def crop(data, width, x, y, w, h):
     return bytes(out)
 
 
-def paste(data, width, x, y, w, h, rect):
+def paste(data: bytes, width: int, x: int, y: int, w: int, h: int, rect: bytes) -> bytes:
     """The image with its w×h rectangle at (x, y) replaced by `rect`."""
     stride, rstride = (width + 7) // 8, (w + 7) // 8
     out = bytearray(data)
@@ -62,20 +65,22 @@ def paste(data, width, x, y, w, h, rect):
     return bytes(out)
 
 
-def changed_rects(old, new, width, height, tile=8, max_rects=8):
+def changed_rects(old: bytes, new: bytes, width: int, height: int, tile: int = 8, max_rects: int = 8) -> list[Rect]:
     """Rectangles (x, y, w, h) covering every pixel that differs between two images. Built from tile×tile squares:
     runs of changed squares per row, stacked where the next row has the same run. More than max_rects rectangles
     are merged into their bounding box. [] if nothing changed."""
     stride = (width + 7) // 8
     diff = bytes(a ^ b for a, b in zip(old, new))
 
-    def changed(tx, ty):
+    def changed(tx: int, ty: int) -> bool:
         return any(diff[y * stride + x // 8] & (0x80 >> (x % 8))
                    for y in range(ty, min(ty + tile, height)) for x in range(tx, min(tx + tile, width)))
 
-    rects, above = [], {}           # above: (x, w) of a run in the previous tile row -> index in rects
+    rects: list[Rect] = []
+    above: dict[tuple[int, int], int] = {}      # above: (x, w) of a run in the previous tile row -> index in rects
     for ty in range(0, height, tile):
-        th, row, x = min(tile, height - ty), {}, 0
+        th, x = min(tile, height - ty), 0
+        row: dict[tuple[int, int], int] = {}
         while x < width:
             if not changed(x, ty):
                 x += tile
@@ -100,7 +105,7 @@ def changed_rects(old, new, width, height, tile=8, max_rects=8):
     return rects
 
 
-def pattern(kind, width, height):
+def pattern(kind: str, width: int, height: int) -> bytes:
     """Test patterns without Pillow: "border" (frame and a diagonal) or "checker" (4 px squares)."""
     if kind not in ("border", "checker"):
         raise ValueError(f"unknown pattern {kind!r}")
@@ -117,7 +122,7 @@ def pattern(kind, width, height):
     return bytes(buf)
 
 
-def text(string, width, height, font=None, size=12):
+def text(string: str, width: int, height: int, font: str | None = None, size: int = 12) -> bytes:
     """Text from the top-left corner; "\\n" starts a new line. font: a TrueType file, or None for Pillow's default."""
     from PIL import Image, ImageDraw, ImageFont
     img = Image.new("1", (width, height))
@@ -126,18 +131,18 @@ def text(string, width, height, font=None, size=12):
     return img.tobytes()
 
 
-def picture(path, width, height):
+def picture(path: str, width: int, height: int) -> bytes:
     """A picture file, scaled to fit, centred and thresholded at 50 %."""
     from PIL import Image, ImageOps
     fitted = ImageOps.contain(Image.open(path).convert("L"), (width, height))
     canvas = Image.new("L", (width, height))
     canvas.paste(fitted, ((width - fitted.width) // 2, (height - fitted.height) // 2))
-    return canvas.point(lambda v: 255 if v >= 128 else 0).convert("1").tobytes()
+    return canvas.point([255 if v >= 128 else 0 for v in range(256)]).convert("1").tobytes()
 
 
 # -- colour, rgb565be (plan question 16) ---------------------------------------------------------------------
 
-def pack_rgb565(rgb, width, height):
+def pack_rgb565(rgb: bytes, width: int, height: int) -> bytes:
     """rgb565be bytes from RGB888 bytes (3 per pixel), row-major."""
     out = bytearray(width * height * 2)
     for i in range(width * height):
@@ -148,17 +153,17 @@ def pack_rgb565(rgb, width, height):
     return bytes(out)
 
 
-def rgb565(r, g, b):
+def rgb565(r: int, g: int, b: int) -> bytes:
     """One pixel as two bytes, most significant first."""
     value = (r & 0xF8) << 8 | (g & 0xFC) << 3 | b >> 3
     return bytes((value >> 8, value & 0xFF))
 
 
-def pattern_rgb565(kind, width, height):
+def pattern_rgb565(kind: str, width: int, height: int) -> bytes:
     """Test pictures without Pillow: "bars", "gradient" or "checker"."""
     bars = [(255, 255, 255), (255, 255, 0), (0, 255, 255), (0, 255, 0),
             (255, 0, 255), (255, 0, 0), (0, 0, 255), (0, 0, 0)]
-    rows = []
+    rows: list[bytes] = []
     for y in range(height):
         row = bytearray()
         for x in range(width):
@@ -176,7 +181,7 @@ def pattern_rgb565(kind, width, height):
     return b"".join(rows)
 
 
-def picture_rgb565(path, width, height, rotate=0, fill=False):
+def picture_rgb565(path: str, width: int, height: int, rotate: int = 0, fill: bool = False) -> bytes:
     """A picture file as rgb565be. rotate turns it by 90, 180 or 270 degrees first, for a landscape photo on a
     portrait panel; fill crops to cover the whole panel instead of fitting it inside black borders."""
     from PIL import Image, ImageOps
@@ -192,16 +197,16 @@ def picture_rgb565(path, width, height, rotate=0, fill=False):
     return pack_rgb565(canvas.tobytes(), width, height)
 
 
-def crop_rgb565(data, width, x, y, w, h):
+def crop_rgb565(data: bytes, width: int, x: int, y: int, w: int, h: int) -> bytes:
     """The w x h rectangle at (x, y), rows packed one after another."""
     stride = width * 2
     return b"".join(data[(y + row) * stride + x * 2: (y + row) * stride + (x + w) * 2] for row in range(h))
 
 
-def tile_crcs(data, width, height, tile=20):
+def tile_crcs(data: bytes, width: int, height: int, tile: int = 20) -> list[int]:
     """CRC32 per tile, row-major, as the device computes them while pixels arrive."""
     stride = width * 2
-    out = []
+    out: list[int] = []
     for ty in range(0, height, tile):
         rows = min(tile, height - ty)
         for tx in range(0, width, tile):
@@ -214,22 +219,25 @@ def tile_crcs(data, width, height, tile=20):
     return out
 
 
-def image_id(data, width, height, tile=20):
+def image_id(data: bytes, width: int, height: int, tile: int = 20) -> str:
     """What state.profile.image.id reports: CRC32 over the tile CRCs, each as four bytes, most significant first."""
     table = b"".join(crc.to_bytes(4, "big") for crc in tile_crcs(data, width, height, tile))
     return "%08x" % zlib.crc32(table)
 
 
-def changed_tiles(old, new, width, height, tile=20, max_rects=8):
+def changed_tiles(old: bytes, new: bytes, width: int, height: int, tile: int = 20,
+                  max_rects: int = 8) -> list[Rect]:
     """Tile-aligned rectangles (x, y, w, h) covering every tile that differs. Rows of changed tiles are merged,
     then stacked where the next row has the same run; more than max_rects rectangles become their bounding box."""
     before, after = tile_crcs(old, width, height, tile), tile_crcs(new, width, height, tile)
     per_row = (width + tile - 1) // tile
-    rects, above = [], {}
+    rects: list[Rect] = []
+    above: dict[tuple[int, int], int] = {}
     for ty in range(0, height, tile):
         rows = min(tile, height - ty)
         row_index = ty // tile
-        runs, tx = [], 0
+        runs: list[tuple[int, int]] = []
+        tx = 0
         while tx < width:
             i = row_index * per_row + tx // tile
             if before[i] == after[i]:
@@ -239,7 +247,7 @@ def changed_tiles(old, new, width, height, tile=20, max_rects=8):
             while tx < width and before[row_index * per_row + tx // tile] != after[row_index * per_row + tx // tile]:
                 tx += tile
             runs.append((x0, min(tx, width) - x0))
-        row = {}
+        row: dict[tuple[int, int], int] = {}
         for run in runs:
             if run in above:
                 i = above[run]

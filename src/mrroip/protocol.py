@@ -5,20 +5,25 @@ Protocol constants (MRROIP-1.md §2.4, §5.3, §9.3). The name is spelled here a
 the package, so a rename is a one-line diff.
 """
 
-NAME = "MRRoIP"
-TOKEN = "mrroip"
-VERSION = "0.1"
+from typing import Final
 
-UDP_PORT = 5300
-WHOIS_PORT = 8266
-SSDP_ADDR = ("239.255.255.250", 1900)
-SSDP_ST = "urn:schemas-mrroip-org:device:Endpoint:1"
-HEADER_PREFIX = "X-MRROIP-"        # X-MRROIP-ID, -NAME, -TYPE, -CLASS (§6.1)
-MDNS_SERVICE = "_mrroip"           # + "._tcp" (§6.2)
+NAME: Final = "MRRoIP"
+TOKEN: Final = "mrroip"
+VERSION: Final = "0.1"
+
+UDP_PORT: Final = 5300
+WHOIS_PORT: Final = 8266
+SSDP_ADDR: Final[tuple[str, int]] = ("239.255.255.250", 1900)
+SSDP_ST: Final = "urn:schemas-mrroip-org:device:Endpoint:1"
+HEADER_PREFIX: Final = "X-MRROIP-"        # X-MRROIP-ID, -NAME, -TYPE, -CLASS (§6.1)
+MDNS_SERVICE: Final = "_mrroip"           # + "._tcp" (§6.2)
 
 #: One dynamic RTP payload type per pixel format of a video stream (plan question 16). 96 is what GStreamer and
 #: FFmpeg send for RFC 4175 video, so standard 8-bit RGB keeps it; MRRoIP's own two-byte pixel group gets its own
 #: number, which lets a capture tell the two apart without a session description.
-RTP_PAYLOAD_TYPES = {"rgb": 96, "rgb565be": 98}
+RTP_PAYLOAD_TYPES: Final[dict[str, int]] = {"rgb": 96, "rgb565be": 98}
 
-CORE_MODES = ["estop", "reset", "release", "hold"]
+CORE_MODES: Final[tuple[str, ...]] = ("estop", "reset", "release", "hold")
+
+BODY_MAX: Final = 4096                     # §2.3: the limit on every reserved path
+REPLAY_WINDOW_MS: Final = 5000             # §9.5

@@ -18,7 +18,8 @@ C-11, C-28, C-30 and C-31 need an operator (a power cycle, patience, an SSID
 change). They prompt; --no-prompt skips them.
 """
 
-import argparse, importlib, json, socket, sys, time
+import argparse, importlib, json, socket, sys, time, urllib.parse
+from ipaddress import IPv4Address
 
 from mrroip_lib import (Res, test, Dev, Hooks, ssdp_search, whois, wait_back, ask,
                         CORE_MODES)
@@ -34,7 +35,7 @@ CLASSES      = ("mobile", "stationary", "passive")
 
 @test("C-1", "SSDP discovery")
 def c01(d, ctx):
-    r = Res("C-1", c01._name)
+    r = Res.of("C-1")
     hits = ssdp_search(timeout=5.0)
     if d.ip not in hits:
         return r.failed("no SSDP response within 5 s")
@@ -53,7 +54,7 @@ def c01(d, ctx):
 
 @test("C-2", "SSDP identity headers")
 def c02(d, ctx):
-    r = Res("C-2", c02._name)
+    r = Res.of("C-2")
     h = ctx.get("ssdp")
     if not h:
         return r.skipped("C-1 did not run")
@@ -67,10 +68,10 @@ def c02(d, ctx):
 
 @test("C-3", "mDNS name resolves")
 def c03(d, ctx):
-    r = Res("C-3", c03._name)
+    r = Res.of("C-3")
     name = d.dfn["device_name"]
     try:
-        ip = socket.gethostbyname(f"{name}.local")
+        ip = IPv4Address(socket.gethostbyname(f"{name}.local"))
     except Exception as e:
         return r.failed(f"{name}.local did not resolve ({e}); "
                         "on Linux this needs avahi/nss-mdns installed on the host")
@@ -79,18 +80,18 @@ def c03(d, ctx):
 
 @test("C-4", "whois probe")
 def c04(d, ctx):
-    r = Res("C-4", c04._name)
+    r = Res.of("C-4")
     hits = whois(d.ip)
     if d.ip not in hits:
         return r.failed("no reply on UDP 8266")
-    got = hits[d.ip].get("id")
+    got = hits[d.ip].device_id
     return r.passed(got) if got == d.dfn["device_id"] \
         else r.failed(f"whois id {got} != {d.dfn['device_id']}")
 
 
 @test("C-5", "identity survives a rename")
 def c05(d, ctx):
-    r = Res("C-5", c05._name)
+    r = Res.of("C-5")
     did, original = d.dfn["device_id"], d.dfn["device_name"]
     if len(did.split(":")) != 6:
         return r.failed(f"device_id {did!r} is not a MAC address")
@@ -109,7 +110,7 @@ def c05(d, ctx):
 
 @test("C-6", "/definition shape")
 def c06(d, ctx):
-    r = Res("C-6", c06._name)
+    r = Res.of("C-6")
     dfn = d.dfn
     missing = [k for k in REQUIRED_TOP if k not in dfn]
     if missing:
@@ -132,7 +133,7 @@ def c06(d, ctx):
 
 @test("C-7", "device class declared")
 def c07(d, ctx):
-    r = Res("C-7", c07._name)
+    r = Res.of("C-7")
     cls = d.dfn.get("device_class")
     if cls not in CLASSES:
         return r.failed(f"device_class {cls!r} is not one of {CLASSES}")
@@ -143,7 +144,7 @@ def c07(d, ctx):
 
 @test("C-8", "core modes declared")
 def c08(d, ctx):
-    r = Res("C-8", c08._name)
+    r = Res.of("C-8")
     got = d.dfn.get("capabilities", {}).get("core_modes")
     if got is None:
         return r.failed("capabilities.core_modes absent")
@@ -156,7 +157,7 @@ def c08(d, ctx):
 
 @test("C-9", "definition and config agree")
 def c09(d, ctx):
-    r = Res("C-9", c09._name)
+    r = Res.of("C-9")
     dk = {p["name"] for p in d.dfn["parameters"]}
     ck = set(d.cfg())
     if dk == ck:
@@ -169,7 +170,7 @@ def c09(d, ctx):
 
 @test("C-10", "config applies immediately")
 def c10(d, ctx):
-    r = Res("C-10", c10._name)
+    r = Res.of("C-10")
     p = d.param("control_timeout_ms")
     cur = d.cfg()["control_timeout_ms"]
     new = 3000 if cur != 3000 else 4000
@@ -190,7 +191,7 @@ def c10(d, ctx):
 
 @test("C-11", "config volatility across reboot", star=True)
 def c11(d, ctx):
-    r = Res("C-11", c11._name, )
+    r = Res.of("C-11")
     if ctx["args"].no_prompt:
         return r.skipped("needs a power cycle (--no-prompt)")
     base = d.cfg()["control_timeout_ms"]
@@ -218,7 +219,7 @@ def c11(d, ctx):
 
 @test("C-12", "config write is atomic")
 def c12(d, ctx):
-    r = Res("C-12", c12._name)
+    r = Res.of("C-12")
     before = d.cfg()
     good = 5000 if before["control_timeout_ms"] != 5000 else 6000
     code, body = d.set_config(control_timeout_ms=good, udp_port=1)   # 1 is below min
@@ -236,7 +237,7 @@ def c12(d, ctx):
 
 @test("C-13", "unknown key rejected")
 def c13(d, ctx):
-    r = Res("C-13", c13._name)
+    r = Res.of("C-13")
     code, body = d.set_config(contrl_timeout_ms=5000)
     if code != 400:
         return r.failed(f"unknown key accepted or wrong status ({code})")
@@ -247,7 +248,7 @@ def c13(d, ctx):
 
 @test("C-14", "range checking")
 def c14(d, ctx):
-    r = Res("C-14", c14._name)
+    r = Res.of("C-14")
     p = d.param("control_timeout_ms")
     lo = d.set_config(control_timeout_ms=p["min"] - 1)[0]
     hi = d.set_config(control_timeout_ms=p["max"] + 1)[0]
@@ -261,7 +262,7 @@ def c14(d, ctx):
 
 @test("C-15", "optimistic concurrency")
 def c15(d, ctx):
-    r = Res("C-15", c15._name)
+    r = Res.of("C-15")
     m = d.meta()
     if "config_version" not in m:
         return r.failed("no _meta.config_version")
@@ -276,7 +277,7 @@ def c15(d, ctx):
 
 @test("C-16", "control is idempotent", star=True)
 def c16(d, ctx):
-    r = Res("C-16", c16._name)
+    r = Res.of("C-16")
     h = ctx["hooks"]
     if not (h.activate and h.counter):
         return r.skipped("no profile hooks; a core suite cannot invent a mode")
@@ -310,7 +311,7 @@ def _fault_note(d):
 
 @test("C-17", "seq echoed on both transports")
 def c17(d, ctx):
-    r = Res("C-17", c17._name)
+    r = Res.of("C-17")
     s = 424242
     a = d.control_udp(seq=s, mode="hold")
     b = d.control(seq=s + 1, mode="hold")
@@ -324,7 +325,7 @@ def c17(d, ctx):
 
 @test("C-18", "replay rejected, master restart tolerated")
 def c18(d, ctx):
-    r = Res("C-18", c18._name)
+    r = Res.of("C-18")
     raw = json.dumps({"seq": 900000, "mode": "hold"}).encode()
     first, second = d.control_udp(raw=raw), d.control_udp(raw=raw)
     if first.get("accepted") is not True:
@@ -341,7 +342,7 @@ def c18(d, ctx):
 
 @test("C-19", "HTTP and UDP behave identically")
 def c19(d, ctx):
-    r = Res("C-19", c19._name)
+    r = Res.of("C-19")
     d.quiesce()
     body = {"seq": 700001, "mode": "hold"}
     u = d.control_udp(raw=json.dumps(body).encode())
@@ -359,7 +360,7 @@ def c19(d, ctx):
 
 @test("C-20", "unknown mode rejected")
 def c20(d, ctx):
-    r = Res("C-20", c20._name)
+    r = Res.of("C-20")
     b = d.control(mode="zzz_not_a_mode")
     if b.get("accepted") is not False or b.get("error") != "unknown_mode":
         return r.failed(f"accepted={b.get('accepted')} error={b.get('error')}")
@@ -372,7 +373,7 @@ def c20(d, ctx):
 
 @test("C-21", "timeout behaviour matches device_class", star=True)
 def c21(d, ctx):
-    r = Res("C-21", c21._name)
+    r = Res.of("C-21")
     h, cls = ctx["hooks"], d.device_class
     if not h.activate:
         return r.skipped("no profile hooks")
@@ -404,7 +405,7 @@ def c21(d, ctx):
 
 @test("C-22", "unattended operation", star=True)
 def c22(d, ctx):
-    r = Res("C-22", c22._name)
+    r = Res.of("C-22")
     h, cls = ctx["hooks"], d.device_class
     if cls != "stationary":
         return r.skipped(f"only meaningful for stationary endpoints (this is {cls})")
@@ -429,7 +430,7 @@ def c22(d, ctx):
 
 @test("C-23", "release is immediate")
 def c23(d, ctx):
-    r = Res("C-23", c23._name)
+    r = Res.of("C-23")
     d.set_config(control_timeout_ms=10000, persist=False)
     d.control(mode="hold")
     if d.state().get("authority") != "commanded":
@@ -444,7 +445,7 @@ def c23(d, ctx):
 
 @test("C-24", "estop stops, latches, survives a timeout")
 def c24(d, ctx):
-    r = Res("C-24", c24._name)
+    r = Res.of("C-24")
     h = ctx["hooks"]
     d.quiesce(); h.prepare_fast(d)
     if h.activate:
@@ -478,7 +479,7 @@ def c24(d, ctx):
 
 @test("C-25", "/state polling does not hold authority")
 def c25(d, ctx):
-    r = Res("C-25", c25._name)
+    r = Res.of("C-25")
     d.quiesce()
     d.set_config(control_timeout_ms=2000, persist=False)
     d.control(mode="hold")
@@ -497,7 +498,7 @@ def c25(d, ctx):
 
 @test("C-26", "authority transfer is visible")
 def c26(d, ctx):
-    r = Res("C-26", c26._name)
+    r = Res.of("C-26")
     if not ctx["args"].second_host:
         return r.skipped("run with --second-host <ip of another machine> to exercise "
                          "authority_taken_from")
@@ -507,7 +508,7 @@ def c26(d, ctx):
 
 @test("C-27", "error strings match across transports")
 def c27(d, ctx):
-    r = Res("C-27", c27._name)
+    r = Res.of("C-27")
     cases = [({"mode": "zzz"}, "unknown_mode"),
              ({}, None)]                             # missing mode: any error, but same
     bad = []
@@ -524,7 +525,7 @@ def c27(d, ctx):
 
 @test("C-28", "announcement rate-limit recovery")
 def c28(d, ctx):
-    r = Res("C-28", c28._name)
+    r = Res.of("C-28")
     if not ctx["args"].slow:
         return r.skipped("pass --slow, or build with a shortened recovery window")
     base = d.cfg()["announce_interval_s"]
@@ -546,7 +547,7 @@ def c28(d, ctx):
 
 @test("C-29", "malformed input survives")
 def c29(d, ctx):
-    r = Res("C-29", c29._name)
+    r = Res.of("C-29")
     probes = [b"", b"{", b'{"seq":1,"mode":', b"\x00\xff\xfe\x01" * 64,
               b'{"seq":1,"mode":"hold"' + b" " * 5000 + b"}",
               json.dumps({"seq": 1, "mode": 42}).encode(),
@@ -555,7 +556,7 @@ def c29(d, ctx):
     s.settimeout(1.5)
     try:
         for p in probes:
-            s.sendto(p, (d.ip, d.udp_port))
+            s.sendto(p, (str(d.ip), d.udp_port))
             try:    s.recvfrom(4096)
             except socket.timeout: pass
     finally:
@@ -575,14 +576,14 @@ def c29(d, ctx):
 
 @test("C-30", "AP-mode parity")
 def c30(d, ctx):
-    return Res("C-30", c30._name).skipped(
+    return Res.of("C-30").skipped(
         "erase credentials, join the fallback AP, re-run with "
         "--host 192.168.4.1 --only C-1,C-6,C-10,C-16")
 
 
 @test("C-31", "30 minute soak")
 def c31(d, ctx):
-    r = Res("C-31", c31._name)
+    r = Res.of("C-31")
     if not ctx["args"].soak:
         return r.skipped("pass --soak to run (30 minutes)")
     h = ctx["hooks"]
@@ -629,7 +630,7 @@ def load_profile(name):
               f"suite only.\n        Core tests that need a device to do something "
               f"will skip.")
         return [], Hooks()
-    return list(getattr(mod, "TESTS", [])), getattr(mod, "HOOKS", Hooks())()
+    return list(getattr(mod, "TESTS", [])), getattr(mod, "HOOKS", Hooks)()
 
 
 def run(tests, d, ctx, args, results):
@@ -660,7 +661,7 @@ def run(tests, d, ctx, args, results):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--host")
+    ap.add_argument("--host", help="address, or address:port for an endpoint not serving HTTP on 80")
     ap.add_argument("--discover", action="store_true")
     ap.add_argument("--udp-port", type=int, default=5300)
     ap.add_argument("--profile", help="override the profile module; default is "
@@ -675,25 +676,29 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
-    ip = args.host
-    if args.discover or not ip:
+    address: IPv4Address | str = args.host
+    if args.discover or not address:
         print("SSDP M-SEARCH ...")
-        hits = ssdp_search()
+        # address -> (name, type, where its /definition is)
+        hits = {ip: (h.get("X-MRROIP-NAME", "?"), h.get("X-MRROIP-TYPE", ""), h.get("LOCATION", ""))
+                for ip, h in ssdp_search().items()}
         if not hits:
             print("  nothing on SSDP; trying the whois probe")
-            hits = whois()
+            hits = {ip: (w.name, w.device_type, w.definition) for ip, w in whois().items()}
         if not hits:
             print("No endpoint found. If the device is up, multicast is most likely "
                   "being blocked\nbetween this host and it — a guest network or a mesh "
                   "AP will do that silently.")
             return 2
-        for k, v in hits.items():
-            print(f"  {k}  {v.get('X-MRROIP-NAME') or v.get('name') or '?'}  "
-                  f"{v.get('X-MRROIP-TYPE') or v.get('type') or ''}")
+        for k, (name, kind, _) in hits.items():
+            print(f"  {k}  {name}  {kind}")
         ip = sorted(hits)[0]
-        print(f"using {ip}\n")
+        netloc = urllib.parse.urlsplit(hits[ip][2]).netloc
+        # an endpoint serving HTTP on another port (§5.3)
+        address = netloc if netloc.startswith(f"{ip}:") else ip
+        print(f"using {address}\n")
 
-    d = Dev(ip, args.udp_port)
+    d = Dev(address, args.udp_port)
     try:
         dfn = d.definition()
     except Exception as e:

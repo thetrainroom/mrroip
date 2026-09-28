@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,7 @@ description = "Python client for MRRoIP (Model Railroad over IP) endpoints"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = []
 
 [project.optional-dependencies]
@@ -17,3 +17,14 @@ image = ["Pillow"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+mrroip = ["py.typed"]
+
+[tool.pyright]
+include = ["src", "probe", "tests", "examples"]
+exclude = ["**/managed_components", "**/build", "**/__pycache__"]
+extraPaths = ["src", "probe"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+strict = ["src/mrroip"]

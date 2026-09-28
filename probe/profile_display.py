@@ -84,7 +84,7 @@ def _image_state(d):
 
 @test("P-1", "image round trip")
 def p01(d, ctx):
-    r = Res("P-1", p01._name)
+    r = Res.of("P-1")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -103,7 +103,7 @@ def p01(d, ctx):
 
 @test("P-2", "image of the wrong size rejected")
 def p02(d, ctx):
-    r = Res("P-2", p02._name)
+    r = Res.of("P-2")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -121,7 +121,7 @@ def p02(d, ctx):
 
 @test("P-3", "invalid Base64 rejected")
 def p03(d, ctx):
-    r = Res("P-3", p03._name)
+    r = Res.of("P-3")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -137,7 +137,7 @@ def p03(d, ctx):
 
 @test("P-4", "screen off blanks, on restores")
 def p04(d, ctx):
-    r = Res("P-4", p04._name)
+    r = Res.of("P-4")
     if _fault(d):
         return r.skipped(f"the device reports fault {_fault(d)!r} (see P-7)")
     off = d.control(mode="show", objects={"screen": "off"})
@@ -153,7 +153,7 @@ def p04(d, ctx):
 
 @test("P-5", "contrast applies and is range-checked")
 def p05(d, ctx):
-    r = Res("P-5", p05._name)
+    r = Res.of("P-5")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -172,7 +172,7 @@ def p05(d, ctx):
 
 @test("P-6", "panel applies at restart")
 def p06(d, ctx):
-    r = Res("P-6", p06._name)
+    r = Res.of("P-6")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -205,7 +205,7 @@ def p06(d, ctx):
 
 @test("P-7", "a display fault is named and refuses pictures")
 def p07(d, ctx):
-    r = Res("P-7", p07._name)
+    r = Res.of("P-7")
     fault = _fault(d)
     if not fault:
         return r.skipped("no fault reported; run against a device without a working display")
@@ -234,7 +234,7 @@ def _show_checker(d):
 
 @test("P-8", "partial update replaces its rectangle")
 def p08(d, ctx):
-    r = Res("P-8", p08._name)
+    r = Res.of("P-8")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -253,13 +253,14 @@ def p08(d, ctx):
     if got != want:
         return r.failed(f"/state reports crc32 {got}, the patched image is {want}")
     bus_after = (d.pstate().get("image") or {}).get("bus_bytes")
-    bus = f", {bus_after - bus_before} bytes on the display bus" if None not in (bus_before, bus_after) else ""
+    bus = (f", {bus_after - bus_before} bytes on the display bus"
+           if bus_before is not None and bus_after is not None else "")
     return r.passed(f"{RECT[2]}x{RECT[3]} at ({RECT[0]}, {RECT[1]}), crc32 {got}{bus}")
 
 
 @test("P-9", "partial update on the wrong image refused")
 def p09(d, ctx):
-    r = Res("P-9", p09._name)
+    r = Res.of("P-9")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -277,7 +278,7 @@ def p09(d, ctx):
 
 @test("P-10", "a repeated partial update is harmless")
 def p10(d, ctx):
-    r = Res("P-10", p10._name)
+    r = Res.of("P-10")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -299,7 +300,7 @@ def p10(d, ctx):
 
 @test("P-11", "invalid rectangles refused")
 def p11(d, ctx):
-    r = Res("P-11", p11._name)
+    r = Res.of("P-11")
     skip = _one_bit(d, r)
     if skip:
         return r.skipped(skip)
@@ -334,7 +335,7 @@ def p11(d, ctx):
 
 @test("P-12", "colour upload round trip")
 def p12(d, ctx):
-    r = Res("P-12", p12._name)
+    r = Res.of("P-12")
     skip = _colour(d, r)
     if skip:
         return r.skipped(skip)
@@ -355,7 +356,7 @@ def p12(d, ctx):
 
 @test("P-13", "tile-aligned partial update")
 def p13(d, ctx):
-    r = Res("P-13", p13._name)
+    r = Res.of("P-13")
     skip = _colour(d, r)
     if skip:
         return r.skipped(skip)
@@ -385,7 +386,7 @@ def p13(d, ctx):
 
 @test("P-14", "invalid uploads refused")
 def p14(d, ctx):
-    r = Res("P-14", p14._name)
+    r = Res.of("P-14")
     skip = _colour(d, r)
     if skip:
         return r.skipped(skip)
@@ -416,7 +417,7 @@ def p14(d, ctx):
 
 @test("P-15", "streamed frames arrive whole")
 def p15(d, ctx):
-    r = Res("P-15", p15._name)
+    r = Res.of("P-15")
     skip = _colour(d, r)
     if skip:
         return r.skipped(skip)
@@ -431,10 +432,11 @@ def p15(d, ctx):
         return r.failed("the stream did not start")
     before = d.pstate().get("stream", {})
     sender = rtp.Sender(d.ip, port, w, h, "rgb565be", fps=5)
-    frames, last = 8, None
-    for i in range(frames):
-        last = image.pattern_rgb565("gradient" if i % 2 else "checker", w, h)
-        sender.send_frame(last)
+    frames = 8
+    pictures = [image.pattern_rgb565("gradient" if i % 2 else "checker", w, h) for i in range(frames)]
+    for picture in pictures:
+        sender.send_frame(picture)
+    last = pictures[-1]
     sender.close()
     time.sleep(1.2)
     state = d.pstate()
