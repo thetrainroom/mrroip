@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
+[workspace]
+resolver = "3"
+members = ["mrroip-proto", "mrroip-client", "mrroip-gui"]
+
+[workspace.package]
+version = "0.2.0"                   # the project version: pyproject.toml, idf_component.yml, the tag
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/thetrainroom/mrroip"
+authors = ["Thierry Gschwind"]
+
+[workspace.dependencies]
+mrroip-proto = { path = "mrroip-proto" }
+mrroip-client = { path = "mrroip-client" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+socket2 = { version = "0.6", features = ["all"] }
