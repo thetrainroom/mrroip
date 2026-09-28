@@ -86,7 +86,7 @@ In the application's `main/idf_component.yml`:
 dependencies:
   mrroip:
     git: git@github.com:thetrainroom/mrroip.git
-    version: v0.1.1                 # a tag, a branch or a commit
+    version: v0.1.2                 # a tag, a branch or a commit
     path: components/mrroip
 ```
 
