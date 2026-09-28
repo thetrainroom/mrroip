@@ -46,3 +46,10 @@ A file is `{"cases": [ … ]}`. Each case starts from a **fresh endpoint** (defa
   `{"$contains": [ … ]}`, which matches a list containing an element matching each entry.
 - `"$any"` matches any value, including `null`; `"$absent"` matches only a missing key.
 - Numbers compare by value (`5` equals `5.0`); everything else by equality.
+
+## Grammar cases
+
+`grammar.json` holds declaration → value → reason cases for the check every implementation runs against a
+declaration (MRROIP-1.md §7.2, including `one_of`): `mrroip.decl.check` in Python, `Decl::check` in Rust. Each case
+is `{"name", "decl", "value", "reason"}`, with `reason` null where the value is accepted. Both test suites replay
+the file, so the GUI and the Python endpoint refuse the same values for the same reasons.

@@ -358,6 +358,18 @@ An element MAY be a record, declared as `"type": "object[]"` with `fields`, each
 
 A master renders that as a table of eight rows and three columns without knowing what a zone is. Records SHOULD NOT contain further records: one level keeps every master's renderer simple, and a device needing more structure than that is telling you it wants an interface of its own (Section 7.4) or a resource of its own (Section 7.5).
 
+A value MAY take one of several shapes, declared as `"one_of"`, a list of alternatives, in place of `type`. Each alternative is a declaration in this grammar without a `name`; the value is accepted when any alternative accepts it. A stream that is started with a record and stopped with a word is the case that needs it:
+
+```json
+{ "id": "stream", "one_of": [
+    { "type": "object", "fields": [
+        { "name": "port", "type": "int", "min": 1024, "max": 65535, "default": 5004 },
+        { "name": "format", "type": "enum", "values": ["rgb565be", "rgb"] } ] },
+    { "type": "enum", "values": ["off"] } ] }
+```
+
+Alternatives MUST differ in their JSON type — a string and a record, not two records — so that a value matches one of them at most and a master knows which form it is looking at. Alternatives MUST NOT themselves be `one_of`. A master renders a choice between the forms, and the field of the form chosen. Where no alternative accepts a value, the reason given is that of the alternative with the value's JSON type, and `wrong_type` if there is none.
+
 Reported values follow the same declaration. An `input` object whose value is a variable-length list — the detections in the current frame, say — declares `max_count` so that a master can size what it allocates and what it draws before the first report arrives.
 
 `persist` in a declaration says whether the endpoint can store that parameter at all. A parameter declared `"persist": false` is deliberately volatile — a test aid, or a value only meaningful while running — and returns to its default after a power cycle. Whether a particular write is stored is the writer's choice (Section 8.2).
@@ -368,7 +380,7 @@ A parameter that takes effect only when the endpoint restarts declares `"applies
 
 A property list with types and ranges is enough for a master to **render** a device it has never seen. It is not enough to **drive** one. A master that knows only `speed: float 0.0–1.0` cannot know it is looking at a moving train, so it cannot brake it at a signal, hold it on an occupied block, or stop it when something goes wrong — and automation is the reason most masters exist.
 
-An object is identified by `id` and otherwise **described by exactly the same grammar as a parameter** — `type`, `min`, `max`, `unit`, `default`, `values`, `count`, `fields`, all of Section 7.2. It differs in two ways only, and both are optional.
+An object is identified by `id` and otherwise **described by exactly the same grammar as a parameter** — `type`, `min`, `max`, `unit`, `default`, `values`, `count`, `fields`, `one_of`, all of Section 7.2. It differs in two ways only, and both are optional.
 
 `access` is `control` by default. An object declared `"access": "state"` is observed and reported but never commanded: a detector input, a measured current, a detection result. It is an object rather than a parameter because it changes at run time and travels with the rest of the state.
 
@@ -929,6 +941,7 @@ Without a profile module these four **skip**, with a note saying so. They MUST N
 | 2026-09-17 | Colour display endpoint: bulk upload path, tile CRC table, RTP stream receiver. Both display variants pass one probe file |
 | 2026-09-18 | This document: the three sources consolidated into one numbered specification; name settled as MRRoIP; profiles moved out to their own documents |
 | 2026-09-28 | Name corrected to MRRoIP (two Rs: Model RailRoad) throughout the implementations and the wire. This document replaces `MRROIP-1.md` rev 1.0, which is removed; its section numbering survives for Sections 5 to 11, 13 and 14, while identity moved to 2.4 and 5.1, device classes to 4.2, encoding to 2.3, persistence to 8.3 and the conformance tests to Appendix A |
+| 2026-09-28 | `one_of` (7.2): a value that takes one of several shapes, as the display streams and partial images need |
 | 2026-09-28 | Text reconciled with the reference implementation and the conformance suite, where the two disagreed: profile modes and `hold` (9.2, 9.3), `mode` required, per-write `persist` with `_meta.dirty_keys` and `applies: "restart"` (7.2, 8), objects keyed by `id`, `state.mode`, the full error table (10), binary object states (9.8), a non-default HTTP port (5.3). Unsolicited reporting (9.7) made optional until implemented and tested |
 
 ### B.1 Measured Results Referenced Above

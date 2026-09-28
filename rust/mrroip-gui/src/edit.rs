@@ -17,6 +17,9 @@ pub struct Field {
     /// The text does not parse as JSON
     pub invalid: bool,
     pub changed: bool,
+    /// `one_of`: the form chosen, and a field per form, so switching back keeps what was typed
+    pub choice: usize,
+    pub forms: Vec<Field>,
 }
 
 impl Field {
@@ -26,7 +29,7 @@ impl Field {
             Value::Null => String::new(), // no value yet: an empty field, not the word "null"
             other => other.to_string(),
         };
-        Field { value, text, invalid: false, changed: false }
+        Field { value, text, invalid: false, changed: false, choice: 0, forms: Vec::new() }
     }
 
     /// The value, if the declaration accepts it; otherwise the §8.2 reason
@@ -107,6 +110,7 @@ pub fn field_ui(ui: &mut Ui, id: &str, decl: &Decl, def: &Definition, field: &mu
                 }
                 response.changed()
             }
+            (ValueType::OneOf, _) => one_of_ui(ui, id, decl, def, field),
             _ => {
                 // lists, records and unknown types: JSON text
                 let response = ui.add(TextEdit::multiline(&mut field.text).code_editor().desired_rows(1).desired_width(320.0));
@@ -130,6 +134,55 @@ pub fn field_ui(ui: &mut Ui, id: &str, decl: &Decl, def: &Definition, field: &mu
         field.changed = true;
     }
     changed
+}
+
+/// A `one_of` value (§7.2): a choice of form, and the field of the form chosen
+fn one_of_ui(ui: &mut Ui, id: &str, decl: &Decl, def: &Definition, field: &mut Field) -> bool {
+    let forms = decl.one_of.as_deref().unwrap_or(&[]);
+    if forms.is_empty() {
+        return false;
+    }
+    if field.forms.len() != forms.len() {
+        // the form that accepts the current value starts selected and holds it; the others start at their default
+        field.choice = forms.iter().position(|f| f.check(&field.value).is_ok()).unwrap_or(0);
+        field.forms = forms
+            .iter()
+            .enumerate()
+            .map(|(i, f)| Field::new(if i == field.choice { field.value.clone() } else { f.default.clone().unwrap_or(Value::Null) }))
+            .collect();
+    }
+    let mut choice = field.choice;
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ComboBox::from_id_salt(format!("{id}-form")).selected_text(form_label(&forms[choice])).show_ui(ui, |ui| {
+            for (i, f) in forms.iter().enumerate() {
+                ui.selectable_value(&mut choice, i, form_label(f));
+            }
+        });
+        if choice != field.choice {
+            field.choice = choice;
+            changed = true;
+        }
+        changed |= field_ui(ui, &format!("{id}-{choice}"), &forms[choice], def, &mut field.forms[choice], true);
+    });
+    if changed {
+        let chosen = &field.forms[field.choice];
+        field.value = chosen.value.clone();
+        field.invalid = chosen.invalid;
+    }
+    changed
+}
+
+/// How a form is named in the choice: its one word where it is a single word, else its kind of value
+fn form_label(form: &Decl) -> String {
+    match (&form.values, form.json_type()) {
+        (Some(values), _) if values.len() == 1 => values[0].clone(),
+        (_, Some("object")) => "record".into(),
+        (_, Some("string")) => "text".into(),
+        (_, Some("array")) => "list".into(),
+        (_, Some(other)) => other.into(),
+        _ => "value".into(),
+    }
 }
 
 /// A value for display: strings bare, everything else as compact JSON

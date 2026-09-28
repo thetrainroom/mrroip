@@ -37,6 +37,9 @@ pub struct Decl {
     pub max_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fields: Option<Vec<Decl>>,
+    /// Alternative forms, in place of `type`: the value is accepted when any accepts it (§7.2)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub one_of: Option<Vec<Decl>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unit: Option<String>,
     /// `control` (the default) or `state` (§7.3)
@@ -67,6 +70,8 @@ pub enum ValueType {
     Resource,
     /// `object[]`: a record with `fields`
     Record,
+    /// `one_of`: one of several forms, each a declaration of its own
+    OneOf,
     /// A type this version does not know; accepted as is and rendered as JSON
     Other(String),
 }
@@ -79,6 +84,9 @@ impl Decl {
 
     /// The element type, and whether the value is a list of them
     pub fn value_type(&self) -> (ValueType, bool) {
+        if self.one_of.is_some() {
+            return (ValueType::OneOf, false);
+        }
         let (base, list) = match self.type_.strip_suffix("[]") {
             Some(base) => (base, true),
             None => (self.type_.as_str(), false),
@@ -115,6 +123,18 @@ impl Decl {
     /// Checks a whole value against the declaration. Returns the §8.2 reason on refusal:
     /// `wrong_type`, `out_of_range`, `too_long`, `not_allowed` or `wrong_count`.
     pub fn check(&self, value: &Value) -> Result<(), &'static str> {
+        if let Some(alternatives) = &self.one_of {
+            // accepted by any form; refused with the reason of the form that has the value's JSON type
+            let mut reason = "wrong_type";
+            for alternative in alternatives {
+                match alternative.check(value) {
+                    Ok(()) => return Ok(()),
+                    Err(r) if alternative.json_type() == Some(json_type(value)) => reason = r,
+                    Err(_) => {}
+                }
+            }
+            return Err(reason);
+        }
         let (t, list) = self.value_type();
         if !list {
             return self.check_element(&t, value);
@@ -160,7 +180,19 @@ impl Decl {
                 }
                 Ok(())
             }
-            ValueType::Other(_) => Ok(()),
+            ValueType::Other(_) | ValueType::OneOf => Ok(()),
+        }
+    }
+
+    /// The JSON type this declaration takes, where it says
+    pub fn json_type(&self) -> Option<&'static str> {
+        match self.value_type() {
+            (_, true) => Some("array"),
+            (ValueType::Int | ValueType::Float, false) => Some("number"),
+            (ValueType::Bool, false) => Some("boolean"),
+            (ValueType::String | ValueType::Enum | ValueType::Resource, false) => Some("string"),
+            (ValueType::Record, false) => Some("object"),
+            _ => None,
         }
     }
 
@@ -190,6 +222,18 @@ impl Decl {
             _ => {}
         }
         d
+    }
+}
+
+/// The JSON type of a value: "number", "string", "boolean", "object", "array" or "null"
+pub fn json_type(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
     }
 }
 
@@ -233,6 +277,17 @@ mod tests {
         assert_eq!(r.check(&json!([{"label": "a"}])), Ok(()));
         assert_eq!(r.check(&json!([{"label": "abcde"}])), Err("too_long"));
         assert_eq!(r.check(&json!([{"zz": 1}])), Err("wrong_type"));
+    }
+
+    /// ../../conformance/grammar.json: the Python check replays the same cases
+    #[test]
+    fn grammar_cases() {
+        let cases: Value = serde_json::from_str(include_str!("../../../conformance/grammar.json")).unwrap();
+        for case in cases["cases"].as_array().unwrap() {
+            let d = decl(case["decl"].clone());
+            let want = case["reason"].as_str();
+            assert_eq!(d.check(&case["value"]).err(), want, "{}", case["name"]);
+        }
     }
 
     #[test]

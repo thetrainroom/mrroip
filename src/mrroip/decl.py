@@ -21,8 +21,41 @@ def is_number(v: Json) -> TypeGuard[int | float]:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def json_type(value: Json) -> str:
+    """The JSON type of a value: "number", "string", "boolean", "object", "array" or "null"."""
+    if isinstance(value, bool):
+        return "boolean"
+    if is_number(value):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, dict):
+        return "object"
+    return "array" if isinstance(value, list) else "null"
+
+
+def declared_json_type(decl: JsonObject) -> str | None:
+    """The JSON type a declaration takes, or None where it does not say."""
+    t: str = decl.get("type", "")
+    if t.endswith("[]"):
+        return "array"
+    return {"int": "number", "float": "number", "bool": "boolean", "string": "string", "enum": "string",
+            "resource": "string", "object": "object"}.get(t)
+
+
 def check(decl: JsonObject, value: Json) -> str | None:
     """None if the declaration accepts the whole value, otherwise the §8.2 reason."""
+    alternatives: list[JsonObject] | None = decl.get("one_of")
+    if alternatives is not None:
+        # §7.2: accepted by any form; refused with the reason of the form that has the value's JSON type
+        reason = "wrong_type"
+        for alternative in alternatives:
+            refusal = check(alternative, value)
+            if refusal is None:
+                return None
+            if declared_json_type(alternative) == json_type(value):
+                reason = refusal
+        return reason
     t: str = decl.get("type", "")
     if t.endswith("[]"):
         items = as_list(value)

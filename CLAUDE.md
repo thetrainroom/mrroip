@@ -11,7 +11,7 @@ MRRoIP ("Model RailRoad over IP"): one protocol, implemented several times in th
 - `src/mrroip/` — the Python package: the client (`Device`, discovery, images, RTP) and, in `src/mrroip/endpoint/`, an endpoint core for hosts (standard library only; Pillow optional via `.[image]`).
 - `rust/` — Cargo workspace: `mrroip-proto` (wire types, the declaration grammar, SSDP messages), `mrroip-client` (Device, discovery, authority keeper), `mrroip-gui` (egui desktop app).
 - `probe/` — the conformance probe that checks endpoints against the spec, built on the Python package.
-- `conformance/` — the `reference` profile (`PROFILE-REFERENCE.md`, a lamp: off/on/blink) that every core ships, and `vectors/*.json`, request→response cases every core's unit tests replay (format in `conformance/README.md`).
+- `conformance/` — the `reference` profile (`PROFILE-REFERENCE.md`, a lamp: off/on/blink) that every core ships; `vectors/*.json`, request→response cases every core's unit tests replay; and `grammar.json`, declaration→value→reason cases that the Python (`decl.py`) and Rust (`decl.rs`) checks both replay (formats in `conformance/README.md`).
 
 The actual devices (boards, drivers, profiles) live in the sibling repository `../esp32` (`../esp32/oled`, `../esp32/colour`); they consume the component via `path: ../../../mrroip/components/mrroip`. Only board-independent code belongs here. Design notes referenced as "plan question N" or "milestone M5" are in `../esp32/oled/MRROIP-PLAN.md`.
 

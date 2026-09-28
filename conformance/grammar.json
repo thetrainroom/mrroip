@@ -1,0 +1,656 @@
+{
+ "cases": [
+  {
+   "name": "int in range",
+   "decl": {
+    "id": "level",
+    "type": "int",
+    "min": 0,
+    "max": 100
+   },
+   "value": 40,
+   "reason": null
+  },
+  {
+   "name": "int bound",
+   "decl": {
+    "id": "level",
+    "type": "int",
+    "min": 0,
+    "max": 100
+   },
+   "value": 100,
+   "reason": null
+  },
+  {
+   "name": "int as float",
+   "decl": {
+    "id": "level",
+    "type": "int",
+    "min": 0,
+    "max": 100
+   },
+   "value": 40.0,
+   "reason": null
+  },
+  {
+   "name": "int out of range",
+   "decl": {
+    "id": "level",
+    "type": "int",
+    "min": 0,
+    "max": 100
+   },
+   "value": 101,
+   "reason": "out_of_range"
+  },
+  {
+   "name": "int fraction",
+   "decl": {
+    "id": "level",
+    "type": "int",
+    "min": 0,
+    "max": 100
+   },
+   "value": 1.5,
+   "reason": "wrong_type"
+  },
+  {
+   "name": "int from bool",
+   "decl": {
+    "id": "level",
+    "type": "int",
+    "min": 0,
+    "max": 100
+   },
+   "value": true,
+   "reason": "wrong_type"
+  },
+  {
+   "name": "int from string",
+   "decl": {
+    "id": "level",
+    "type": "int",
+    "min": 0,
+    "max": 100
+   },
+   "value": "40",
+   "reason": "wrong_type"
+  },
+  {
+   "name": "string too long",
+   "decl": {
+    "name": "n",
+    "type": "string",
+    "max_len": 3
+   },
+   "value": "abcd",
+   "reason": "too_long"
+  },
+  {
+   "name": "enum not allowed",
+   "decl": {
+    "id": "s",
+    "type": "enum",
+    "values": [
+     "on",
+     "off"
+    ]
+   },
+   "value": "dim",
+   "reason": "not_allowed"
+  },
+  {
+   "name": "fixed list count",
+   "decl": {
+    "name": "d",
+    "type": "int[]",
+    "count": 2,
+    "min": 0,
+    "max": 9
+   },
+   "value": [
+    1
+   ],
+   "reason": "wrong_count"
+  },
+  {
+   "name": "list element range",
+   "decl": {
+    "name": "d",
+    "type": "int[]",
+    "count": 2,
+    "min": 0,
+    "max": 9
+   },
+   "value": [
+    1,
+    10
+   ],
+   "reason": "out_of_range"
+  },
+  {
+   "name": "record unknown field",
+   "decl": {
+    "name": "r",
+    "type": "object",
+    "fields": [
+     {
+      "name": "a",
+      "type": "int"
+     }
+    ]
+   },
+   "value": {
+    "b": 1
+   },
+   "reason": "wrong_type"
+  },
+  {
+   "name": "no type loads, anything goes",
+   "decl": {
+    "id": "screen",
+    "kind": "output"
+   },
+   "value": "on",
+   "reason": null
+  },
+  {
+   "name": "one_of: the record",
+   "decl": {
+    "id": "stream",
+    "one_of": [
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "port",
+        "type": "int",
+        "min": 1024,
+        "max": 65535,
+        "default": 5004
+       },
+       {
+        "name": "format",
+        "type": "enum",
+        "values": [
+         "rgb565be",
+         "rgb"
+        ]
+       }
+      ]
+     },
+     {
+      "type": "enum",
+      "values": [
+       "off"
+      ]
+     }
+    ]
+   },
+   "value": {
+    "port": 5004,
+    "format": "rgb"
+   },
+   "reason": null
+  },
+  {
+   "name": "one_of: the word",
+   "decl": {
+    "id": "stream",
+    "one_of": [
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "port",
+        "type": "int",
+        "min": 1024,
+        "max": 65535,
+        "default": 5004
+       },
+       {
+        "name": "format",
+        "type": "enum",
+        "values": [
+         "rgb565be",
+         "rgb"
+        ]
+       }
+      ]
+     },
+     {
+      "type": "enum",
+      "values": [
+       "off"
+      ]
+     }
+    ]
+   },
+   "value": "off",
+   "reason": null
+  },
+  {
+   "name": "one_of: a word not allowed",
+   "decl": {
+    "id": "stream",
+    "one_of": [
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "port",
+        "type": "int",
+        "min": 1024,
+        "max": 65535,
+        "default": 5004
+       },
+       {
+        "name": "format",
+        "type": "enum",
+        "values": [
+         "rgb565be",
+         "rgb"
+        ]
+       }
+      ]
+     },
+     {
+      "type": "enum",
+      "values": [
+       "off"
+      ]
+     }
+    ]
+   },
+   "value": "on",
+   "reason": "not_allowed"
+  },
+  {
+   "name": "one_of: the record out of range",
+   "decl": {
+    "id": "stream",
+    "one_of": [
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "port",
+        "type": "int",
+        "min": 1024,
+        "max": 65535,
+        "default": 5004
+       },
+       {
+        "name": "format",
+        "type": "enum",
+        "values": [
+         "rgb565be",
+         "rgb"
+        ]
+       }
+      ]
+     },
+     {
+      "type": "enum",
+      "values": [
+       "off"
+      ]
+     }
+    ]
+   },
+   "value": {
+    "port": 80
+   },
+   "reason": "out_of_range"
+  },
+  {
+   "name": "one_of: no form has this JSON type",
+   "decl": {
+    "id": "stream",
+    "one_of": [
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "port",
+        "type": "int",
+        "min": 1024,
+        "max": 65535,
+        "default": 5004
+       },
+       {
+        "name": "format",
+        "type": "enum",
+        "values": [
+         "rgb565be",
+         "rgb"
+        ]
+       }
+      ]
+     },
+     {
+      "type": "enum",
+      "values": [
+       "off"
+      ]
+     }
+    ]
+   },
+   "value": 5004,
+   "reason": "wrong_type"
+  },
+  {
+   "name": "one_of: whole image",
+   "decl": {
+    "id": "image",
+    "one_of": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "base_crc32",
+        "type": "string",
+        "max_len": 8
+       },
+       {
+        "name": "rects",
+        "type": "object[]",
+        "max_count": 8,
+        "fields": [
+         {
+          "name": "x",
+          "type": "int",
+          "min": 0,
+          "max": 255
+         },
+         {
+          "name": "y",
+          "type": "int",
+          "min": 0,
+          "max": 255
+         },
+         {
+          "name": "w",
+          "type": "int",
+          "min": 1,
+          "max": 256
+         },
+         {
+          "name": "h",
+          "type": "int",
+          "min": 1,
+          "max": 256
+         },
+         {
+          "name": "data",
+          "type": "string"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "value": "AAAA",
+   "reason": null
+  },
+  {
+   "name": "one_of: patch",
+   "decl": {
+    "id": "image",
+    "one_of": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "base_crc32",
+        "type": "string",
+        "max_len": 8
+       },
+       {
+        "name": "rects",
+        "type": "object[]",
+        "max_count": 8,
+        "fields": [
+         {
+          "name": "x",
+          "type": "int",
+          "min": 0,
+          "max": 255
+         },
+         {
+          "name": "y",
+          "type": "int",
+          "min": 0,
+          "max": 255
+         },
+         {
+          "name": "w",
+          "type": "int",
+          "min": 1,
+          "max": 256
+         },
+         {
+          "name": "h",
+          "type": "int",
+          "min": 1,
+          "max": 256
+         },
+         {
+          "name": "data",
+          "type": "string"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "value": {
+    "base_crc32": "d09a7293",
+    "rects": [
+     {
+      "x": 8,
+      "y": 8,
+      "w": 16,
+      "h": 8,
+      "data": "AAAA"
+     }
+    ]
+   },
+   "reason": null
+  },
+  {
+   "name": "one_of: patch with too many rects",
+   "decl": {
+    "id": "image",
+    "one_of": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "base_crc32",
+        "type": "string",
+        "max_len": 8
+       },
+       {
+        "name": "rects",
+        "type": "object[]",
+        "max_count": 8,
+        "fields": [
+         {
+          "name": "x",
+          "type": "int",
+          "min": 0,
+          "max": 255
+         },
+         {
+          "name": "y",
+          "type": "int",
+          "min": 0,
+          "max": 255
+         },
+         {
+          "name": "w",
+          "type": "int",
+          "min": 1,
+          "max": 256
+         },
+         {
+          "name": "h",
+          "type": "int",
+          "min": 1,
+          "max": 256
+         },
+         {
+          "name": "data",
+          "type": "string"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "value": {
+    "base_crc32": "x",
+    "rects": [
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "data": ""
+     }
+    ]
+   },
+   "reason": "wrong_count"
+  },
+  {
+   "name": "one_of: a list is neither form",
+   "decl": {
+    "id": "image",
+    "one_of": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "object",
+      "fields": [
+       {
+        "name": "base_crc32",
+        "type": "string",
+        "max_len": 8
+       },
+       {
+        "name": "rects",
+        "type": "object[]",
+        "max_count": 8,
+        "fields": [
+         {
+          "name": "x",
+          "type": "int",
+          "min": 0,
+          "max": 255
+         },
+         {
+          "name": "y",
+          "type": "int",
+          "min": 0,
+          "max": 255
+         },
+         {
+          "name": "w",
+          "type": "int",
+          "min": 1,
+          "max": 256
+         },
+         {
+          "name": "h",
+          "type": "int",
+          "min": 1,
+          "max": 256
+         },
+         {
+          "name": "data",
+          "type": "string"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "value": [
+    1
+   ],
+   "reason": "wrong_type"
+  }
+ ]
+}
