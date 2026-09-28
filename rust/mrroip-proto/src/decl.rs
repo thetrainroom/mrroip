@@ -16,7 +16,8 @@ pub struct Decl {
     /// Parameters and record fields by `name`
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(rename = "type")]
+    /// Empty when a declaration names no type: it still loads, and is shown and edited as JSON
+    #[serde(rename = "type", default)]
     pub type_: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<Value>,
@@ -232,6 +233,15 @@ mod tests {
         assert_eq!(r.check(&json!([{"label": "a"}])), Ok(()));
         assert_eq!(r.check(&json!([{"label": "abcde"}])), Err("too_long"));
         assert_eq!(r.check(&json!([{"zz": 1}])), Err("wrong_type"));
+    }
+
+    #[test]
+    fn a_declaration_without_a_type_still_loads() {
+        // what display firmware 0.1.0 sends: a pre-grammar `kind`, no `type`
+        let d = decl(json!({"id": "screen", "kind": "output", "states": ["on", "off"]}));
+        assert_eq!(d.value_type(), (ValueType::Other(String::new()), false));
+        assert_eq!(d.check(&json!("on")), Ok(()));
+        assert_eq!(d.extra["kind"], "output");
     }
 
     #[test]

@@ -281,6 +281,25 @@ mod tests {
     }
 
     #[test]
+    fn definition_from_display_firmware_0_1_0() {
+        // the colour display as it answered on 2026-09-28: misspelt proto, objects with `kind` and no `type`
+        let v = json!({
+            "proto": "MMRoIP", "proto_version": "0.1", "device_id": "7c:df:a1:b4:1f:b8", "device_name": "display-2",
+            "device_type": "display", "device_class": "passive", "profile_version": "0.1", "firmware": "0.1.0",
+            "endpoints": {"definition": "/definition", "udp_control_port": 5300},
+            "capabilities": {"autonomous": false, "commanded": true, "telemetry_hz": 0, "modes": ["show", "blink"],
+                             "core_modes": ["estop", "reset", "release", "hold"]},
+            "objects": [{"id": "image", "kind": "bitmap", "profile": {"width_px": 240, "height_px": 280}},
+                        {"id": "screen", "kind": "output", "states": ["on", "off"]}],
+            "parameters": [{"name": "backlight", "type": "int", "default": 100, "min": 0, "max": 100, "unit": "%",
+                            "persist": true}]
+        });
+        let d: Definition = serde_json::from_value(v).unwrap();
+        assert_eq!(d.objects.len(), 2);
+        assert_eq!(d.object("image").unwrap().extra["profile"]["width_px"], 240);
+    }
+
+    #[test]
     fn control_round_trip() {
         let m = ControlMessage { seq: 7, ..ControlMessage::mode("on") }.with_object("level", json!(40));
         assert_eq!(serde_json::to_value(&m).unwrap(), json!({"seq": 7, "mode": "on", "objects": {"level": 40}}));
