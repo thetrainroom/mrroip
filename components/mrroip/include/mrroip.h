@@ -11,6 +11,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // Pins of an RMII PHY on the ESP32's own Ethernet MAC (CONFIG_MRROIP_ETHERNET)
 typedef struct {

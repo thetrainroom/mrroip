@@ -11,6 +11,7 @@ and the conformance probe that checks them.
 | `probe/mrroip_probe.py` | Core conformance suite C-1 … C-31 (§15) |
 | `probe/mrroip_lib.py` | Probe harness: results, profile hooks; transport comes from the package |
 | `probe/discovery_check.py` | What endpoints show on the network, and what happens across a boot (D-1 … D-11) |
+| `examples/minimal_endpoint/` | ESP-IDF application: the core plus stub profile hooks — a starting point for a new device, and a compile test for every public header |
 | `examples/send_image.py` | Show a picture, text or test pattern on a display endpoint |
 | `examples/bounce.py` | A box bouncing on a colour endpoint: tile updates over HTTP, or whole frames over RTP |
 | `examples/stream_ffmpeg.py` | Stream anything FFmpeg can read to a colour endpoint |
@@ -81,9 +82,17 @@ In the application's `main/idf_component.yml`:
 ```yaml
 dependencies:
   mrroip:
-    path: ../../../mrroip/components/mrroip   # this repository checked out beside the application's own
-    # or, once it is published:  git: <URL>, path: components/mrroip
+    git: git@github.com:thetrainroom/mrroip.git
+    version: v0.1.1                 # a tag, a branch or a commit
+    path: components/mrroip
 ```
+
+The component manager clones it into the application's `managed_components/` and writes the exact
+content hash into `dependencies.lock.<target>`, so a committed application rebuilds against the same
+library code later. An application developed alongside this repository can point at the checkout
+instead — `path: ../../../mrroip/components/mrroip` — which is what `../esp32/oled` and
+`../esp32/colour` do; the two forms are exclusive, because a `git:` source ignores a local override
+(`idf_component_tools/sources/__init__.py` tries `git` before `path`).
 
 ```c
 #include "mrroip.h"

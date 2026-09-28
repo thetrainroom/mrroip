@@ -1,0 +1,8 @@
+dependencies:
+  # The component from this same repository. An application outside it uses the form in README.md:
+  #   git: git@github.com:thetrainroom/mrroip.git
+  #   version: v0.1.1
+  #   path: components/mrroip
+  mrroip:
+    path: ../../../components/mrroip
+  espressif/mdns: "1.12.0"
