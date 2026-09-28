@@ -2,7 +2,7 @@
 """
 mrroip_probe.py — core conformance suite for an MRRoIP endpoint.
 
-Implements the C-tests of MRROIP-CORE-SPEC.md §15. Nothing here knows what kind
+Implements the C-tests of MRROIP-1.md Appendix A. Nothing here knows what kind
 of device it is talking to; profile behaviour is tested by profile_<type>.py,
 which this driver loads automatically from /definition.device_type.
 
@@ -728,7 +728,7 @@ def main():
         npass += r.ok is True; nfail += r.ok is False; nskip += r.ok is None
     print("=" * 78)
     print(f"{npass} passed, {nfail} failed, {nskip} skipped   "
-          "(* = the contested decisions of core §17)")
+          "(* = the decisions core §16.3 lists as resolved)")
     starred = [r for r in results if getattr(r, "star", False) and r.ok is False]
     if starred:
         print("\nThe starred failures are the point of the exercise. Each is a place "

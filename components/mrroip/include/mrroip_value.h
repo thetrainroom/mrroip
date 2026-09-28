@@ -1,6 +1,6 @@
 /*
  * Reading a desired object state without giving the profile a JSON library — the counterpart of emit.h
- * (MRROIP-CORE-SPEC.md §13.4). The core passes the parsed value; the profile asks for what it expects and gets
+ * (MRROIP-1.md §13.1). The core passes the parsed value; the profile asks for what it expects and gets
  * NULL, -1 or false for anything else.
  */
 #pragma once

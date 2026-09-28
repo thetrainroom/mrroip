@@ -1,5 +1,5 @@
 """
-One MRRoIP endpoint over HTTP and UDP (MRROIP-CORE-SPEC.md §7–§9.6).
+One MRRoIP endpoint over HTTP and UDP (MRROIP-1.md §7–§9.6).
 
 Device-agnostic: nothing here knows what kind of device it is talking to. What the endpoint contains
 and accepts comes from its /definition.

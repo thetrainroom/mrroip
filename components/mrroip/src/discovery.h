@@ -1,5 +1,5 @@
 /*
- * Discovery (MRROIP-CORE-SPEC.md §6): SSDP announcements and M-SEARCH answers (normative), the whois probe on
+ * Discovery (MRROIP-1.md §6): SSDP announcements and M-SEARCH answers (normative), the whois probe on
  * UDP 8266 (diagnostic), and mDNS (convenience; compiled out with CONFIG_MRROIP_MDNS=n).
  */
 #pragma once

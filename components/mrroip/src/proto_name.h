@@ -1,4 +1,4 @@
-/* proto_name.h — the ONLY place the protocol name is spelled (MRROIP-CORE-SPEC.md §0). */
+/* proto_name.h — the ONLY place the protocol name is spelled (MRROIP-1.md §2.4). */
 #pragma once
 
 #define MRROIP_NAME        "MRRoIP"          /* human-readable          */

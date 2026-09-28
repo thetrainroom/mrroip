@@ -9,7 +9,7 @@
 
 static const char *TAG = "udp_control";
 
-#define DATAGRAM_MAX    4096        // same limit as an HTTP body (§5.3)
+#define DATAGRAM_MAX    4096        // same limit as an HTTP body (§2.3)
 #define REPLY_MAX       1536
 #define RECV_TIMEOUT_S  1           // how quickly a changed udp_port takes effect
 

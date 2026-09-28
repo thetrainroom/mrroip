@@ -136,7 +136,7 @@ static int form_value(const char *body, const char *key, char *out, size_t size)
     return 0;
 }
 
-// Flash is not written from the HTTP server's thread (§12): a short-lived task stores and restarts,
+// Flash is not written from the HTTP server's thread (§8.3): a short-lived task stores and restarts,
 // which also gives the response time to reach the phone
 static void save_and_restart_task(void *arg)
 {

@@ -1,11 +1,14 @@
 # mrroip
 
-MRRoIP ("Model Railroad over IP"): the protocol specification, a Python library to control endpoints,
-and the conformance probe that checks them.
+MRRoIP ("Model **R**ail**R**oad over IP"): the protocol specification, a Python library to control
+endpoints, and the conformance probe that checks them.
+
+**The specification is a draft** (`MRROIP-1.md`). Wire details may still change; the implementations here
+and in the [esp32](https://github.com/thetrainroom/esp32) applications are the only ones that exist. MIT licensed.
 
 | Path | What |
 |---|---|
-| `MRROIP-CORE-SPEC.md` | Core endpoint specification (rev 1.0) |
+| `MRROIP-1.md` | **The specification — a draft.** Core protocol: identity, discovery, description, configuration, control, state, authority. Sections 1–14 normative, conformance tests in Appendix A |
 | `components/mrroip/` | ESP-IDF component: the endpoint core in C. The application adds the device profile |
 | `src/mrroip/` | Python package: `Device`, discovery, display images and partial updates. Standard library only |
 | `probe/mrroip_probe.py` | Core conformance suite C-1 … C-31 (§15) |
@@ -157,3 +160,7 @@ HTTP back, `ssdp:alive` ×3) and runs:
 `--reboot`: `config` writes the parameter declared `"applies": "restart"` and restores it (two clean
 restarts); `serial:PORT` resets through a serial port with auto-reset; `manual` asks you to pull the
 power; `none` skips D-1 … D-4.
+
+## Licence
+
+MIT — see `LICENSE`. Copyright (c) 2026 Thierry Gschwind.

@@ -23,7 +23,7 @@
 
 static const char *TAG = "http_api";
 
-#define BODY_MAX            4096        // §5.3
+#define BODY_MAX            4096        // §2.3
 #define RESTART_DELAY_MS    500
 #define CONTROL_REPLY_MAX   1536
 #define OBJECT_ID_MAX       32
@@ -40,7 +40,7 @@ const char *http_api_device_id(void)
 {
     if (!device_id[0]) {
         uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_WIFI_STA);    // the station MAC, never the AP one (§4)
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);    // the station MAC, never the AP one (§5.1)
         snprintf(device_id, sizeof(device_id), "%02x:%02x:%02x:%02x:%02x:%02x",
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }

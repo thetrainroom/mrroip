@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 discovery_check.py — what MRRoIP endpoints show on the network, and what happens across a boot
-(MRROIP-CORE-SPEC.md §6). mrroip_probe.py's C-1…C-4 only search; this also listens.
+(MRROIP-1.md §6). mrroip_probe.py's C-1…C-4 only search; this also listens.
 
     python3.12 discovery_check.py --scan
     python3.12 discovery_check.py --host 192.168.10.164 --reboot config

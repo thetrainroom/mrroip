@@ -1,5 +1,5 @@
 /*
- * Control (MRROIP-CORE-SPEC.md §9–§11): the one parser for HTTP and UDP, sequence numbers and replay,
+ * Control (MRROIP-1.md §9–§11): the one parser for HTTP and UDP, sequence numbers and replay,
  * authority with its timeout, and the core modes estop / reset / release / hold.
  */
 #pragma once

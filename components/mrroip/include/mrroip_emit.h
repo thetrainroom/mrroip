@@ -1,5 +1,5 @@
 /*
- * JSON output for the profile module without giving it a JSON library (MRROIP-CORE-SPEC.md §13.4: profile
+ * JSON output for the profile module without giving it a JSON library (MRROIP-1.md §13.1: profile
  * code does not parse JSON). The core creates the root and owns everything added to it.
  */
 #pragma once

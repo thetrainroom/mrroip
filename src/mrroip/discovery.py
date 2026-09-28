@@ -1,5 +1,5 @@
 """
-Finding MRRoIP endpoints (MRROIP-CORE-SPEC.md §6): SSDP, which is normative, the whois probe, which is a
+Finding MRRoIP endpoints (MRROIP-1.md §6): SSDP, which is normative, the whois probe, which is a
 diagnostic for networks that block multicast, and mDNS, which is a convenience.
 
     ssdp_search()       ask: every endpoint that answers an M-SEARCH

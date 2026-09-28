@@ -1,5 +1,5 @@
 /*
- * The one parameter table (MRROIP-CORE-SPEC.md §7, §13.2): /definition is generated from it and /config
+ * The one parameter table (MRROIP-1.md §7, §7.2): /definition is generated from it and /config
  * writes are validated against it. The four core parameters are defined here; the profile appends its own.
  */
 #pragma once

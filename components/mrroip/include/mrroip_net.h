@@ -1,7 +1,7 @@
 /*
  * Network state for profiles and applications; the bring-up itself is internal (src/net.c). With Ethernet (CONFIG_MRROIP_ETHERNET) a cable with a link and a DHCP address always wins:
- * Wi-Fi is switched off while it lasts, and comes back when the cable goes. Wi-Fi per MRROIP-CORE-SPEC.md
- * §5.1: stored credentials -> station mode (3 attempts of 20 s), otherwise a WPA2 setup access point with a
+ * Wi-Fi is switched off while it lasts, and comes back when the cable goes. Wi-Fi per MRROIP-1.md
+ * §5.2: stored credentials -> station mode (3 attempts of 20 s), otherwise a WPA2 setup access point with a
  * captive portal (portal.c). Credentials live in NVS namespace "mrroip", keys wifi_ssid / wifi_pass (§12),
  * never in the Wi-Fi driver's own storage.
  */

@@ -1,5 +1,5 @@
 /*
- * The interface between the MRRoIP core and a device profile (MRROIP-CORE-SPEC.md §13.4, §14).
+ * The interface between the MRRoIP core and a device profile (MRROIP-1.md §13.1, §14).
  * The core never names a profile parameter or object; the profile never parses JSON or touches a socket.
  */
 #pragma once
@@ -13,11 +13,11 @@
 
 typedef struct {
     const char *device_type;
-    const char *device_class;       // "mobile", "stationary" or "passive" (§3)
+    const char *device_class;       // "mobile", "stationary" or "passive" (§4.2)
     const char *profile_version;
     const char *const *modes;       // profile modes, NULL-terminated; never the core ones (§9.3)
     const char *const *target_modes;// modes that require a target, NULL-terminated, or NULL for none
-    const char *rest_mode;          // the mode reported at start and after reset (§14 item 9)
+    const char *rest_mode;          // the mode reported at start and after reset (§14 item 5)
     bool autonomous;
     int telemetry_hz;
 } profile_info_t;

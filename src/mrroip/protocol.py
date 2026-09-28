@@ -1,5 +1,5 @@
 """
-Protocol constants (MRROIP-CORE-SPEC.md §0, §5.2, §9.3). The name is spelled here and nowhere else in
+Protocol constants (MRROIP-1.md §2.4, §5.3, §9.3). The name is spelled here and nowhere else in
 the package, so a rename is a one-line diff.
 """
 

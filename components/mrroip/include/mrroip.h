@@ -1,5 +1,5 @@
 /*
- * MRRoIP endpoint core for ESP-IDF (MRROIP-CORE-SPEC.md): /definition, /config, /control over HTTP and UDP, /state,
+ * MRRoIP endpoint core for ESP-IDF (MRROIP-1.md): /definition, /config, /control over HTTP and UDP, /state,
  * authority and timeout, parameters in NVS, network bring-up and discovery. The application supplies the device
  * profile (the functions in mrroip_profile.h) and starts everything in this order:
  *
@@ -41,7 +41,7 @@ bool mrroip_config_write(const char *json, char *msg, size_t size, bool *restart
 // it takes no lock, so it cannot wait for the control lock the core already holds there.
 uint32_t mrroip_master_ip(void);
 
-// The Wi-Fi station MAC, lowercase and colon-separated (§4)
+// The Wi-Fi station MAC, lowercase and colon-separated (§5.1)
 const char *mrroip_device_id(void);
 // Restart after queued flash writes, with ssdp:byebye; erase the namespace first for a factory reset
 void mrroip_restart(bool factory_reset);
