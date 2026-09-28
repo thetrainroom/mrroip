@@ -5,6 +5,8 @@
 #include <string.h>
 #include "cJSON.h"
 #include "esp_err.h"
+#include "esp_log.h"
+#include "nvs.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 #include "control.h"
@@ -14,8 +16,70 @@
 #include "mrroip_params.h"
 #include "mrroip_profile.h"
 #include "net.h"
+#include "proto_name.h"
 #include "store.h"
 #include "udp_control.h"
+
+static const char *TAG = "mrroip";
+
+// Before 2026-09-28 the name was misspelt, and the token with it: devices flashed before then keep their
+// Wi-Fi credentials and settings under this namespace. Read once, then erased.
+#define LEGACY_NAMESPACE "mmroip"
+
+// A device updated from firmware older than the rename keeps what it stored: when the current namespace holds no
+// configuration yet, every entry of the legacy one is copied over, and the legacy one erased once the copy is
+// committed. Runs before any task starts, so writing here does not bypass the store's queue (§8.3).
+static void migrate_legacy_namespace(void)
+{
+    nvs_handle_t current;
+    if (nvs_open(MRROIP_TOKEN, NVS_READWRITE, &current) != ESP_OK) {
+        return;
+    }
+    uint32_t version;
+    char ssid[33];
+    size_t ssid_len = sizeof(ssid);
+    bool configured = nvs_get_u32(current, "cfg_ver", &version) == ESP_OK ||
+                      nvs_get_str(current, "wifi_ssid", ssid, &ssid_len) == ESP_OK;
+    nvs_handle_t legacy;
+    if (configured || nvs_open(LEGACY_NAMESPACE, NVS_READWRITE, &legacy) != ESP_OK) {
+        nvs_close(current);
+        return;
+    }
+    int copied = 0, failed = 0;
+    nvs_iterator_t it = NULL;
+    esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, LEGACY_NAMESPACE, NVS_TYPE_ANY, &it);
+    while (err == ESP_OK) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        bool ok = true;
+        if (info.type == NVS_TYPE_I32) {
+            int32_t v;
+            ok = nvs_get_i32(legacy, info.key, &v) == ESP_OK && nvs_set_i32(current, info.key, v) == ESP_OK;
+        } else if (info.type == NVS_TYPE_U32) {
+            uint32_t v;
+            ok = nvs_get_u32(legacy, info.key, &v) == ESP_OK && nvs_set_u32(current, info.key, v) == ESP_OK;
+        } else if (info.type == NVS_TYPE_STR) {
+            char v[128];
+            size_t len = sizeof(v);
+            ok = nvs_get_str(legacy, info.key, v, &len) == ESP_OK && nvs_set_str(current, info.key, v) == ESP_OK;
+        } else {
+            ok = false;                 // the core never stored other types
+        }
+        ok ? copied++ : failed++;
+        err = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+    if (failed == 0 && nvs_commit(current) == ESP_OK) {
+        nvs_erase_all(legacy);
+        nvs_commit(legacy);
+    }
+    if (copied || failed) {
+        ESP_LOGW(TAG, "%d settings moved from namespace '%s' to '%s'%s", copied, LEGACY_NAMESPACE, MRROIP_TOKEN,
+                 failed ? ", some failed: the old namespace is kept" : "");
+    }
+    nvs_close(legacy);
+    nvs_close(current);
+}
 
 void mrroip_init(void)
 {
@@ -25,6 +89,7 @@ void mrroip_init(void)
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+    migrate_legacy_namespace();
     store_start();
     params_init();
 }
