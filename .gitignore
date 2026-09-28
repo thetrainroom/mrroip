@@ -1,0 +1,9 @@
+# Python and macOS
+__pycache__/
+*.egg-info/
+.DS_Store
+
+# ESP-IDF build output (when an application is built inside this checkout)
+build/
+build-*/
+managed_components/

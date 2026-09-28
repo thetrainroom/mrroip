@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-clock.py — an analog clock on one or more MMRoIP displays: hour marks, hour and minute hands, and a dot that
+clock.py — an analog clock on one or more MRRoIP displays: hour marks, hour and minute hands, and a dot that
 runs round the face for the seconds. Drawn here in plain Python (no Pillow needed).
 
     python3.12 clock.py 192.168.10.164                         # local time
@@ -21,10 +21,10 @@ import time
 from pathlib import Path
 
 try:
-    import mmroip
+    import mrroip
 except ImportError:                     # not installed: use the package in this repository
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    import mmroip
+    import mrroip
 
 
 class Canvas:
@@ -119,7 +119,7 @@ class Target:
     """One display: its size, the last image sent, and its current problem (each reported once)."""
 
     def __init__(self, host, udp, full):
-        self.dev, self.udp, self.full = mmroip.Device(host), udp, full
+        self.dev, self.udp, self.full = mrroip.Device(host), udp, full
         self.size, self.last, self.problem = None, None, "starting"   # so the first success is reported
 
     def report(self, problem):

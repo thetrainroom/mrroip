@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-send_image.py — show a picture, text or test pattern on an MMRoIP display, using the mmroip package.
+send_image.py — show a picture, text or test pattern on an MRRoIP display, using the mrroip package.
 
-    python3.12 send_image.py 192.168.10.164 --file ../../oled/tools/images/testcard.png
+    python3.12 send_image.py 192.168.10.164 --file ../../esp32/oled/tools/images/testcard.png
     python3.12 send_image.py 192.168.10.164 --text "Gleis 3"
     python3.12 send_image.py 192.168.10.164 --pattern checker --udp
 
@@ -14,10 +14,10 @@ import sys
 from pathlib import Path
 
 try:
-    import mmroip
+    import mrroip
 except ImportError:                     # not installed: use the package in this repository
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    import mmroip
+    import mrroip
 
 
 def main():
@@ -30,14 +30,14 @@ def main():
     ap.add_argument("--udp", action="store_true", help="send over UDP instead of HTTP")
     args = ap.parse_args()
 
-    dev = mmroip.Device(args.host)
+    dev = mrroip.Device(args.host)
     w, h = dev.image_size()
     if args.file:
-        data = mmroip.image.picture(args.file, w, h)
+        data = mrroip.image.picture(args.file, w, h)
     elif args.text:
-        data = mmroip.image.text(args.text.replace("\\n", "\n"), w, h)
+        data = mrroip.image.text(args.text.replace("\\n", "\n"), w, h)
     else:
-        data = mmroip.image.pattern(args.pattern, w, h)
+        data = mrroip.image.pattern(args.pattern, w, h)
 
     reply = dev.show_image(data, udp=args.udp)
     if reply.get("accepted"):

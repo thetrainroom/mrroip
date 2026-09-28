@@ -1,14 +1,14 @@
 """
-profile_display.py — profile tests and core-suite hooks for the `display` profile. mmroip_probe.py loads it when
+profile_display.py — profile tests and core-suite hooks for the `display` profile. mrroip_probe.py loads it when
 /definition.device_type is "display", for both kinds of panel:
 
-  * 1-bit SSD1306 endpoints (../../oled/MMROIP-PLAN.md §2), format "1bpp-row-msb": P-1 … P-11
+  * 1-bit SSD1306 endpoints (../../esp32/oled/MRROIP-PLAN.md §2), format "1bpp-row-msb": P-1 … P-11
   * colour endpoints (question 16), format "rgb565be": P-12 … P-15, where pixels arrive with PUT /objects/image
     and the device remembers them as a CRC32 per tile
 
 Each test skips when it does not fit the endpoint's format.
 
-    python3.12 mmroip_probe.py --host 192.168.10.164 --no-prompt --only C-16,C-21,C-24,P-1,P-2,P-3,P-4,P-5,P-6
+    python3.12 mrroip_probe.py --host 192.168.10.164 --no-prompt --only C-16,C-21,C-24,P-1,P-2,P-3,P-4,P-5,P-6
 
 P-6 changes `panel` with persist, so the device restarts twice; it restores the original panel.
 P-8 … P-11 test partial updates (rectangles on top of the image on screen, guarded by base_crc32).
@@ -17,8 +17,8 @@ P-8 … P-11 test partial updates (rectangles on top of the image on screen, gua
 import time
 import zlib
 
-from mmroip import image, rtp
-from mmroip_lib import Hooks, Res, test, wait_back
+from mrroip import image, rtp
+from mrroip_lib import Hooks, Res, test, wait_back
 
 
 class DisplayHooks(Hooks):

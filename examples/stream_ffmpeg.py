@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-stream_ffmpeg.py — stream anything FFmpeg can read to a colour MMRoIP endpoint.
+stream_ffmpeg.py — stream anything FFmpeg can read to a colour MRRoIP endpoint.
 
     python3.12 stream_ffmpeg.py 192.168.10.165 --source "smptebars=size=240x280:rate=5" --seconds 10
     python3.12 stream_ffmpeg.py 192.168.10.165 --file clip.mp4 --fps 5
@@ -20,10 +20,10 @@ import time
 from pathlib import Path
 
 try:
-    import mmroip
+    import mrroip
 except ImportError:                     # not installed: use the package in this repository
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    import mmroip
+    import mrroip
 
 
 def ffmpeg_command(args, width, height):
@@ -54,7 +54,7 @@ def main():
     ap.add_argument("--port", type=int, default=5004)
     args = ap.parse_args()
 
-    device = mmroip.Device(args.host, timeout=15)
+    device = mrroip.Device(args.host, timeout=15)
     width, height = device.image_size()
     frame_bytes = width * height * 2
 
@@ -64,7 +64,7 @@ def main():
         return 1
     before = device.pstate().get("stream", {})
 
-    sender = mmroip.rtp.Sender(args.host, args.port, width, height, "rgb565be", fps=args.fps)
+    sender = mrroip.rtp.Sender(args.host, args.port, width, height, "rgb565be", fps=args.fps)
     command = ffmpeg_command(args, width, height)
     print(" ".join(command))
     ffmpeg = subprocess.Popen(command, stdout=subprocess.PIPE)

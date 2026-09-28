@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-discovery_check.py — what MMRoIP endpoints show on the network, and what happens across a boot
-(MMROIP-CORE-SPEC.md §6). mmroip_probe.py's C-1…C-4 only search; this also listens.
+discovery_check.py — what MRRoIP endpoints show on the network, and what happens across a boot
+(MRROIP-CORE-SPEC.md §6). mrroip_probe.py's C-1…C-4 only search; this also listens.
 
     python3.12 discovery_check.py --scan
     python3.12 discovery_check.py --host 192.168.10.164 --reboot config
@@ -26,9 +26,9 @@ import sys
 import time
 import urllib.request
 
-from mmroip_lib import Res, mmroip            # mmroip_lib makes the package importable
-from mmroip.discovery import NotifyListener, mdns_browse, ssdp_search, whois
-from mmroip.protocol import HEADER_PREFIX, SSDP_ST, TOKEN
+from mrroip_lib import Res, mrroip            # mrroip_lib makes the package importable
+from mrroip.discovery import NotifyListener, mdns_browse, ssdp_search, whois
+from mrroip.protocol import HEADER_PREFIX, SSDP_ST, TOKEN
 
 ALIVE, BYEBYE = "ssdp:alive", "ssdp:byebye"
 STARTUP_ANNOUNCEMENTS = 3
@@ -86,7 +86,7 @@ def observe_boot(dev, listener, trigger, label):
     between two polls, and a request sent to a restarting device can hang until it is back.
     """
     print(f"\n--- boot: {label}")
-    fast = mmroip.Device(dev.ip, dev.udp_port, timeout=0.5)
+    fast = mrroip.Device(dev.ip, dev.udp_port, timeout=0.5)
     before, t_before = uptime_ms(fast), time.monotonic()
     t0 = trigger()
     down = up = None
@@ -172,7 +172,7 @@ def d04_headers(dev, alive):
 
 
 def d05_search(dev, iface):
-    r = Res("D-5", "SSDP search for the MMRoIP target")
+    r = Res("D-5", "SSDP search for the MRRoIP target")
     t = time.monotonic()
     hits = ssdp_search(timeout=5.0, iface=iface)
     if dev.ip not in hits:
@@ -216,7 +216,7 @@ def d09_mdns_service(dev, iface):
     r = Res("D-9", "mDNS service and TXT records")
     found = mdns_browse(iface=iface).get(dev.ip)
     if not found:
-        return r.failed("the _mmroip._tcp browse found nothing at this address")
+        return r.failed("the _mrroip._tcp browse found nothing at this address")
     txt, dfn, bad = found["txt"], dev.dfn, []
     for key, field in (("id", "device_id"), ("name", "device_name"), ("type", "device_type"),
                        ("class", "device_class"), ("fw", "firmware")):
@@ -306,7 +306,7 @@ def main():
     if args.scan or not args.host:
         return scan(args.iface)
 
-    dev = mmroip.Device(args.host)
+    dev = mrroip.Device(args.host)
     dfn = dev.definition()
     print(f"{dfn['device_name']}  {dfn['device_id']}  {dfn['device_type']}/{dfn['device_class']}  fw {dfn['firmware']}")
     method = args.reboot.split(":", 1)[0]

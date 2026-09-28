@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 bounce.py — a box bouncing around a colour endpoint's screen, to watch motion and compare the two ways of
-sending it (../../oled/MMROIP-PLAN.md question 16).
+sending it (../../esp32/oled/MRROIP-PLAN.md question 16).
 
     python3.12 bounce.py 192.168.10.165                      # tiles: only what changed, over HTTP
     python3.12 bounce.py 192.168.10.165 --mode stream --fps 5  # whole frames over RTP
@@ -18,12 +18,12 @@ import time
 from pathlib import Path
 
 try:
-    import mmroip
+    import mrroip
 except ImportError:                     # not installed: use the package in this repository
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    import mmroip
+    import mrroip
 
-from mmroip import image
+from mrroip import image
 
 COLOURS = [(255, 80, 80), (80, 255, 120), (110, 160, 255), (255, 220, 80), (255, 120, 255), (120, 255, 255)]
 
@@ -59,7 +59,7 @@ def main():
                          "single write, which is what stops the seam; try more to see the difference")
     args = ap.parse_args()
 
-    device = mmroip.Device(args.host, timeout=15)
+    device = mrroip.Device(args.host, timeout=15)
     width, height = device.image_size()
     back = background(width, height)
     x, y = width // 3, height // 3
@@ -71,7 +71,7 @@ def main():
         if not device.control(mode="show", objects={"stream": {"port": args.port}}).get("accepted"):
             print("the endpoint did not start a stream")
             return 1
-        sender = mmroip.rtp.Sender(args.host, args.port, width, height, "rgb565be", fps=args.fps)
+        sender = mrroip.rtp.Sender(args.host, args.port, width, height, "rgb565be", fps=args.fps)
     else:
         device.put_image(back)          # a known starting picture, so the first tiles have a base
 

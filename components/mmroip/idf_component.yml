@@ -1,7 +1,0 @@
-description: "MMRoIP (Model Railroad over IP) core endpoint: protocol, network bring-up and discovery"
-version: "0.1.0"
-dependencies:
-  idf: ">=6.1"
-  espressif/cjson: "^1.7.19"    # cJSON is no longer part of ESP-IDF 6
-  # exact: applications with several targets share managed_components/, so their locks must agree
-  espressif/mdns: "1.12.0"      # <device_name>.local and _mmroip._tcp (CONFIG_MMROIP_MDNS)
