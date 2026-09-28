@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 """
 Finding MRRoIP endpoints (MRROIP-1.md §6): SSDP, which is normative, the whois probe, which is a
 diagnostic for networks that block multicast, and mDNS, which is a convenience.

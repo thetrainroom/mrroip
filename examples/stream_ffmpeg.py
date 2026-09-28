@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
 stream_ffmpeg.py — stream anything FFmpeg can read to a colour MRRoIP endpoint.

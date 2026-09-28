@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
 send_image.py — show a picture, text or test pattern on an MRRoIP display, using the mrroip package.

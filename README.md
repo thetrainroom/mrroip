@@ -4,7 +4,7 @@ MRRoIP ("Model **R**ail**R**oad over IP"): the protocol specification, a Python 
 endpoints, and the conformance probe that checks them.
 
 **The specification is a draft** (`MRROIP-1.md`). Wire details may still change; the implementations here
-and in the [esp32](https://github.com/thetrainroom/esp32) applications are the only ones that exist. MIT licensed.
+and in the [esp32](https://github.com/thetrainroom/esp32) applications are the only ones that exist. Apache-2.0 for the code, CC-BY-4.0 for the specification.
 
 | Path | What |
 |---|---|
@@ -86,7 +86,7 @@ In the application's `main/idf_component.yml`:
 dependencies:
   mrroip:
     git: git@github.com:thetrainroom/mrroip.git
-    version: v0.1.2                 # a tag, a branch or a commit
+    version: v0.2.0                 # a tag, a branch or a commit
     path: components/mrroip
 ```
 
@@ -163,4 +163,19 @@ power; `none` skips D-1 … D-4.
 
 ## Licence
 
-MIT — see `LICENSE`. Copyright (c) 2026 Thierry Gschwind.
+Copyright (c) 2026 Thierry Gschwind.
+
+| What | Licence | |
+|---|---|---|
+| The software: `components/mrroip/`, `src/mrroip/`, `probe/`, `examples/` | **Apache-2.0** | `LICENSE`, `NOTICE` |
+| The specification: `MRROIP-1.md` | **CC-BY-4.0**, plus an explicit grant to implement | `LICENSE-SPEC` |
+
+Apache-2.0 means you may put this component in a closed commercial product: keep the copyright
+notice, pass on `NOTICE`, say if you changed the files, and nothing else is asked of you. It also
+grants patent rights in both directions, which MIT does not.
+
+Anyone may implement the protocol, for anything, with no permission or royalty — that is the point
+of publishing it. The one thing reserved is the **name**: Apache-2.0 grants no trademark rights
+(section 6), and `MRRoIP` is meant for implementations that pass the core conformance suite
+(`MRROIP-1.md` Appendix A, `probe/mrroip_probe.py`). Build whatever you like on this code; call it
+MRRoIP once it passes.

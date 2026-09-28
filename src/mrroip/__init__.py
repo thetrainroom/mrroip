@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 """
 mrroip — Python client for MRRoIP endpoints (Model Railroad over IP).
 

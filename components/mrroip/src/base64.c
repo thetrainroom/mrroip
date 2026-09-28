@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #include "mrroip_base64.h"
 
 static int sextet(char c)

@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * Reading a desired object state without giving the profile a JSON library — the counterpart of emit.h
  * (MRROIP-1.md §13.1). The core passes the parsed value; the profile asks for what it expects and gets

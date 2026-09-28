@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #include "mrroip_profile.h"
 
 // A profile without binary objects defines none of these: every upload is refused (plan question 16)

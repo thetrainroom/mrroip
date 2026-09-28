@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #include <math.h>
 #include "cJSON.h"
 #include "mrroip_value.h"

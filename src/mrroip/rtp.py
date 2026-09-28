@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 """
 Uncompressed pictures over RTP in the RFC 4175 layout (../../../esp32/oled/MRROIP-PLAN.md questions 15 and 16).
 

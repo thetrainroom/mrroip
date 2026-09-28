@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * Persistence (MRROIP-1.md §8.3): every flash write goes through one task, never directly from an
  * HTTP handler or a timer. Namespace MRROIP_TOKEN.

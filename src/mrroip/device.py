@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 """
 One MRRoIP endpoint over HTTP and UDP (MRROIP-1.md §7–§9.6).
 

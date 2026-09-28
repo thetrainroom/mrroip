@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * Network state for profiles and applications; the bring-up itself is internal (src/net.c). With Ethernet (CONFIG_MRROIP_ETHERNET) a cable with a link and a DHCP address always wins:
  * Wi-Fi is switched off while it lasts, and comes back when the cable goes. Wi-Fi per MRROIP-1.md

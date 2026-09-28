@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * Wi-Fi setup portal for setup-AP mode: a form for the credentials on the shared HTTP server (http_api.c),
  * and a DNS server answering every name with the AP address, so a phone that joins opens the form by itself.

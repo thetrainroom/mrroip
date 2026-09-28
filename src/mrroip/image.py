@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 """
 1-bit images in the display profile's wire format, "1bpp-row-msb" with Base64: row-major, MSB = leftmost
 pixel, 1 = lit, ceil(width / 8) × height bytes. That is exactly what Pillow's mode "1" tobytes() produces.

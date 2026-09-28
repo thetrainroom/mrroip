@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * HTTP transport for the MRRoIP endpoints (MRROIP-1.md §7–§10): /definition, /config and /state.
  * The same server runs in station and setup-AP mode (§5.2); the setup portal registers its form on it.

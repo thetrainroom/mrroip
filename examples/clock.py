@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
 clock.py — an analog clock on one or more MRRoIP displays: hour marks, hour and minute hands, and a dot that

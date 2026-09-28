@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * JSON output for the profile module without giving it a JSON library (MRROIP-1.md §13.1: profile
  * code does not parse JSON). The core creates the root and owns everything added to it.

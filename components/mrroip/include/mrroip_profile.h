@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * The interface between the MRRoIP core and a device profile (MRROIP-1.md §13.1, §14).
  * The core never names a profile parameter or object; the profile never parses JSON or touches a socket.

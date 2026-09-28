@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 """
 Protocol constants (MRROIP-1.md §2.4, §5.3, §9.3). The name is spelled here and nowhere else in
 the package, so a rename is a one-line diff.

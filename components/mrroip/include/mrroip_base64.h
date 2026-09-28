@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * RFC 4648 Base64 decoding. mbedTLS is deliberately not linked (MRROIP-PLAN.md §5), so this is local.
  */

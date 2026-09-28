@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * Network bring-up, internal to the core. The state and the credential functions are public in mrroip_net.h.
  */

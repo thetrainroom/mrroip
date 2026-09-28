@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /* proto_name.h — the ONLY place the protocol name is spelled (MRROIP-1.md §2.4). */
 #pragma once
 

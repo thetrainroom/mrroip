@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * The one parameter table (MRROIP-1.md §7, §7.2): /definition is generated from it and /config
  * writes are validated against it. The four core parameters are defined here; the profile appends its own.

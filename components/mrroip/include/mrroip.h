@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Thierry Gschwind
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /*
  * MRRoIP endpoint core for ESP-IDF (MRROIP-1.md): /definition, /config, /control over HTTP and UDP, /state,
  * authority and timeout, parameters in NVS, network bring-up and discovery. The application supplies the device

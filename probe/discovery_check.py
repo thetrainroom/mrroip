@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
 discovery_check.py — what MRRoIP endpoints show on the network, and what happens across a boot

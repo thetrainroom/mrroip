@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
 bounce.py — a box bouncing around a colour endpoint's screen, to watch motion and compare the two ways of

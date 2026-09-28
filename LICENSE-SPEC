@@ -1,0 +1,30 @@
+Licence for the specification document (MRROIP-1.md)
+=====================================================
+
+Copyright (c) 2026 Thierry Gschwind.
+
+The specification document MRROIP-1.md is licensed under the Creative Commons Attribution
+4.0 International licence (SPDX: CC-BY-4.0). The authoritative text is at:
+
+    https://creativecommons.org/licenses/by/4.0/legalcode
+
+In short: you may copy, redistribute, quote, translate and adapt the document, including
+commercially, provided you give appropriate credit, link to the licence, and indicate if
+you made changes.
+
+Grant to implement
+------------------
+
+Separately from and in addition to the above: anyone may implement the protocol described
+in MRROIP-1.md, in software or hardware, for any purpose including commercial products,
+with no licence, royalty, registration or notification required. Nothing in the licence of
+the document restricts the implementation of what it describes, and an implementation is
+not an adaptation of the document.
+
+Software in this repository is licensed separately, under Apache-2.0; see LICENSE.
+
+The name
+--------
+
+"MRRoIP" is reserved for implementations that pass the core conformance suite of Appendix A
+(probe/mrroip_probe.py). Nothing here grants rights in the name; see NOTICE.

@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mrroip"
-version = "0.1.2"
+version = "0.2.0"
 description = "Python client for MRRoIP (Model Railroad over IP) endpoints"
 readme = "README.md"
-license = "MIT"
-license-files = ["LICENSE"]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.9"
 dependencies = []
 

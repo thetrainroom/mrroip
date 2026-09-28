@@ -11,6 +11,8 @@
 
 This document is a **draft specification**. It is not a standards-track document of the NMRA, MOROP, SMPTE or any other recognised body, and no such body has reviewed it. Distribution is unlimited.
 
+This document is licensed **CC-BY-4.0**, and anyone may implement what it describes — in software or hardware, commercially, with no permission, royalty or registration (`LICENSE-SPEC`). The reference implementation is licensed separately, under Apache-2.0. The name `MRRoIP` is reserved for implementations that pass the conformance suite of Appendix A.
+
 It specifies the protocol and nothing else. Device profiles are separate documents, published independently and on their own schedule; none is normative here, and this specification must be implementable without reading any of them.
 
 Sections 1 to 13 are **normative**. Section 14 is normative for profile authors. Sections 15 and 16 and Appendices A to C are informative, except where Appendix A states the conditions a conformance run must satisfy.

@@ -1,0 +1,14 @@
+MRRoIP — Model RailRoad over IP
+Copyright (c) 2026 Thierry Gschwind
+
+This product includes software developed as the MRRoIP reference implementation
+(https://github.com/thetrainroom/mrroip), licensed under the Apache License, Version 2.0.
+
+The specification document MRROIP-1.md is not covered by that licence: it is published
+under Creative Commons Attribution 4.0 International, with an explicit grant to implement
+it. See LICENSE-SPEC.
+
+"MRRoIP" is the name of the protocol, not a licence grant. Apache-2.0 section 6 grants no
+trademark rights, and the name is reserved for implementations that pass the published
+core conformance suite (MRROIP-1.md Appendix A, probe/mrroip_probe.py). An implementation
+that does not pass it may of course use this software; it should not use the name.

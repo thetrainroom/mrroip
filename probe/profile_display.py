@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thierry Gschwind
+# SPDX-License-Identifier: Apache-2.0
 """
 profile_display.py — profile tests and core-suite hooks for the `display` profile. mrroip_probe.py loads it when
 /definition.device_type is "display", for both kinds of panel:
