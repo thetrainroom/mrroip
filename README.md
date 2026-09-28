@@ -15,10 +15,12 @@ and in the [esp32](https://github.com/thetrainroom/esp32) applications are the o
 | `probe/mrroip_lib.py` | Probe harness: results, profile hooks; transport comes from the package |
 | `probe/discovery_check.py` | What endpoints show on the network, and what happens across a boot (D-1 … D-11) |
 | `examples/minimal_endpoint/` | ESP-IDF application: the core plus stub profile hooks — a starting point for a new device, and a compile test for every public header |
-| `examples/send_image.py` | Show a picture, text or test pattern on a display endpoint |
-| `examples/bounce.py` | A box bouncing on a colour endpoint: tile updates over HTTP, or whole frames over RTP |
-| `examples/stream_ffmpeg.py` | Stream anything FFmpeg can read to a colour endpoint |
-| `examples/clock.py` | An analog clock with a seconds dot on one or more displays, drawn without Pillow; fast-clock option (`--speed 4 --start 06:00`) |
+| `conformance/` | The `reference` profile every core ships, and the request/response vectors every core's tests replay |
+| `rust/` | Rust crates: protocol types, a client, and a desktop app (`cargo run -p mrroip-gui`) |
+| `src/mrroip/endpoint/` | An endpoint core in Python, for a Raspberry Pi or any host |
+
+Programs for the displays — a clock, pictures, a bouncing box, video — live with the display firmware, in
+`../esp32/tools`.
 
 Endpoints so far: the 1-bit SSD1306 display in `../esp32/oled` and the 240x280 colour display in `../esp32/colour`,
 both in the sibling `esp32` repository. This repository holds only the parts that are not specific to one board.
