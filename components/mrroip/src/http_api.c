@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -35,7 +36,7 @@ static const char *TAG = "http_api";
 
 static httpd_handle_t server;
 static char device_id[32];
-static char etag[128];
+static char etag_base[112];      // firmware, profile version and profile part; config_version is added per request
 
 static const char *const core_modes[] = { "estop", "reset", "release", "hold" };
 
@@ -100,6 +101,9 @@ static esp_err_t send_error(httpd_req_t *req, const char *status, const char *er
 
 static esp_err_t definition_get(httpd_req_t *req)
 {
+    // /definition carries device_name and udp_control_port, so a config write must change the tag
+    char etag[sizeof(etag_base) + 16];
+    snprintf(etag, sizeof(etag), "\"%s-%" PRIu32 "\"", etag_base, params_config_version());
     char if_none_match[sizeof(etag)];
     if (httpd_req_get_hdr_value_str(req, "If-None-Match", if_none_match, sizeof(if_none_match)) == ESP_OK &&
         strcmp(if_none_match, etag) == 0) {
@@ -135,7 +139,7 @@ static esp_err_t definition_get(httpd_req_t *req)
     cJSON_AddBoolToObject(capabilities, "commanded", true);
     cJSON_AddNumberToObject(capabilities, "telemetry_hz", info->telemetry_hz);
     cJSON *modes = cJSON_AddArrayToObject(capabilities, "modes");
-    for (const char *const *mode = info->modes; *mode; mode++) {
+    for (const char *const *mode = info->modes; mode && *mode; mode++) {
         cJSON_AddItemToArray(modes, cJSON_CreateString(*mode));
     }
     cJSON_AddItemToObject(capabilities, "core_modes", cJSON_CreateStringArray(core_modes, 4));
@@ -372,7 +376,7 @@ static esp_err_t method_not_allowed(httpd_req_t *req, httpd_err_code_t error)
 void http_api_start(void)
 {
     const profile_info_t *info = profile_info();
-    snprintf(etag, sizeof(etag), "\"%s-%s-%s\"", esp_app_get_description()->version, info->profile_version, profile_etag());
+    snprintf(etag_base, sizeof(etag_base), "%s-%s-%s", esp_app_get_description()->version, info->profile_version, profile_etag());
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 12;

@@ -3,7 +3,9 @@
 #include "mrroip.h"
 #include "mrroip_profile.h"
 
-static const profile_info_t info = { .device_type = "null", .device_class = "test", .profile_version = "0.1" };
+static const char *const modes[] = { "idle", NULL };
+static const profile_info_t info = { .device_type = "null", .device_class = "passive", .profile_version = "0.1",
+                                     .modes = modes, .rest_mode = "idle" };
 
 const profile_info_t *profile_info(void) { return &info; }
 const param_desc_t *profile_params(size_t *count) { *count = 0; return NULL; }

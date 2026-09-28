@@ -177,7 +177,7 @@ Conventions that have proved useful in practice — a fallback access point when
 
 | Service | Port | Note |
 | --- | --- | --- |
-| HTTP | 80 | All request/response paths |
+| HTTP | 80 | All request/response paths. An endpoint MAY serve on another port — a second endpoint on one host, a test run without privileges — and then MUST carry it in the SSDP `LOCATION`, the mDNS SRV record and the whois reply, whose `definition` becomes a full URL (`http://192.168.1.47:8080/definition`) |
 | Control | UDP 5300 | Configurable. Bound to `0.0.0.0`; accepts broadcast |
 | SSDP | UDP 1900 | Multicast `239.255.255.250` |
 | whois probe | UDP 8266 | Diagnostic (Section 6.3) |
@@ -216,7 +216,7 @@ The four `X-MRROIP-*` headers let a master build a device list without fetching 
 
 ### 6.2 mDNS — Convenience, Not Protocol
 
-An endpoint SHOULD advertise `_mrroip._tcp` on port 80 with TXT records `id`, `name`, `type`, `class` and `fw`, and SHOULD set its hostname so that `<device_name>.local` resolves. This exists so a person can type a name into a browser. **Nothing in the protocol may depend on it**: a conformance run MUST pass with mDNS compiled out.
+An endpoint SHOULD advertise `_mrroip._tcp` on its HTTP port with TXT records `id`, `name`, `type`, `class` and `fw`, and SHOULD set its hostname so that `<device_name>.local` resolves. This exists so a person can type a name into a browser. **Nothing in the protocol may depend on it**: a conformance run MUST pass with mDNS compiled out.
 
 ### 6.3 whois Probe — Diagnostic
 
@@ -235,17 +235,17 @@ The endpoint's self-description: what it is, what it contains, what it accepts, 
 
 An implementation MUST generate this document from the same table that validates `/config` writes. One `static const param_desc_t params[]`, walked once to emit JSON and once to validate. Two hand-maintained lists diverge within a week, and a master that trusts a stale `/definition` is worse than one with none.
 
-The resource is cacheable. An endpoint SHOULD send an `ETag` derived from firmware version plus profile version and serve `304`.
+The resource is cacheable. An endpoint SHOULD send an `ETag` derived from firmware version, profile version and `config_version` — the document carries `device_name` and the UDP port, so a configuration write must change it — and serve `304`.
 
 The example below describes a **turntable**, deliberately: a core document illustrated with one of its own profiles quietly acquires that profile's assumptions.
 
 ```json
 "objects": [
-  { "name": "bridge", "type": "int",
+  { "id": "bridge", "type": "int",
     "min": 1, "max": 24, "unit": "track" },
-  { "name": "lamp", "type": "enum",
+  { "id": "lamp", "type": "enum",
     "values": ["off", "on"], "default": "off" },
-  { "name": "aligned", "access": "state", "type": "bool",
+  { "id": "aligned", "access": "state", "type": "bool",
     "confirms": "bridge" }
 ]
 ```
@@ -269,6 +269,7 @@ Two commanded objects and one observed. The third is the end-switch reading, and
     "config": "/config",
     "control": "/control",
     "state": "/state",
+    "objects": "/objects/{id}",
     "udp_control_port": 5300,
     "icon": "/ui/device.svg"
   },
@@ -278,13 +279,15 @@ Two commanded objects and one observed. The third is the end-switch reading, and
     "commanded": true,
     "reporting": true,
     "telemetry_hz": 5,
+    "modes": ["operate", "park"],
+    "core_modes": ["estop", "reset", "release", "hold"],
     "languages": ["en", "de"]
   },
 
   "objects": [
-    { "name": "bridge", "type": "int", "min": 1, "max": 24, "unit": "track" },
-    { "name": "lamp", "type": "enum", "values": ["off", "on"], "default": "off" },
-    { "name": "aligned", "access": "state", "type": "bool", "confirms": "bridge" }
+    { "id": "bridge", "type": "int", "min": 1, "max": 24, "unit": "track" },
+    { "id": "lamp", "type": "enum", "values": ["off", "on"], "default": "off" },
+    { "id": "aligned", "access": "state", "type": "bool", "confirms": "bridge" }
   ],
 
   "parameters": [
@@ -321,10 +324,11 @@ Two commanded objects and one observed. The third is the end-switch reading, and
 | `proto`, `proto_version`, `endpoints` | Core, fixed |
 | `device_id`, `device_name`, `firmware` | Core |
 | `device_type`, `device_class`, `profile_version` | Profile declares, core carries |
-| `mode` values | Core, fixed. Exactly `estop`, `reset`, `release`, and never declared |
-| `capabilities.reporting` | Core (Section 9.7) |
+| `capabilities.core_modes` | Core, fixed. Exactly `estop`, `reset`, `release`, `hold` (Section 9.3) |
+| `capabilities.modes` | Profile. Its own modes, never repeating a core one (Section 9.2) |
+| `capabilities.reporting` | Core, present only where the endpoint reports unsolicited (Section 9.7) |
 | `capabilities.autonomous`, `.commanded`, `.telemetry_hz` | Profile |
-| `objects[].name` and its value description | Profile declares them; the value description follows Section 7.2 |
+| `objects[].id` and its value description | Profile declares them; the value description follows Section 7.2 |
 | `objects[].profile` | Profile, opaque to core. A master that does not know the type ignores it |
 | `parameters[]` | The four core parameters above are mandatory; the profile appends its own |
 
@@ -356,27 +360,21 @@ A master renders that as a table of eight rows and three columns without knowing
 
 Reported values follow the same declaration. An `input` object whose value is a variable-length list — the detections in the current frame, say — declares `max_count` so that a master can size what it allocates and what it draws before the first report arrives.
 
-`persist` in a declaration says whether the endpoint stores that parameter at all. A parameter declared `"persist": false` is deliberately volatile — a test aid, or a value only meaningful while running — and returns to its default after a power cycle.
+`persist` in a declaration says whether the endpoint can store that parameter at all. A parameter declared `"persist": false` is deliberately volatile — a test aid, or a value only meaningful while running — and returns to its default after a power cycle. Whether a particular write is stored is the writer's choice (Section 8.2).
+
+A parameter that takes effect only when the endpoint restarts declares `"applies": "restart"` — a panel type, a pin assignment, anything the endpoint reads once while bringing up. A master uses it to warn before writing and to show that a restart is pending (Section 8.1).
 
 ### 7.3 Objects
 
 A property list with types and ranges is enough for a master to **render** a device it has never seen. It is not enough to **drive** one. A master that knows only `speed: float 0.0–1.0` cannot know it is looking at a moving train, so it cannot brake it at a signal, hold it on an occupied block, or stop it when something goes wrong — and automation is the reason most masters exist.
 
-An object is therefore described by exactly the same grammar as a parameter — `type`, `min`, `max`, `unit`, `default`, `values`, `count`, `fields`, all of Section 7.2 — with one optional attribute of its own.
-
-`access` is `control` by default. An object declared `"access": "state"` is observed and reported but never commanded: a detector input, a measured current, a detection result. It belongs in this list rather than among the parameters because it changes at run time and travels with the rest of the state.
-
-The two lists stay separate because they behave differently at run time. Objects are commanded or reported continuously and are subject to authority, the timeout and `estop`; parameters are set occasionally, validated, versioned and stored. But a master renders both in one interface from one declaration, so a range is written the same way in either list.
-
-**An object is described by exactly the same grammar as a parameter** — `type`, `min`, `max`, `unit`, `default`, `values`, `count`, `fields`, all of Section 7.2. It differs in two ways only, and both are optional.
+An object is identified by `id` and otherwise **described by exactly the same grammar as a parameter** — `type`, `min`, `max`, `unit`, `default`, `values`, `count`, `fields`, all of Section 7.2. It differs in two ways only, and both are optional.
 
 `access` is `control` by default. An object declared `"access": "state"` is observed and reported but never commanded: a detector input, a measured current, a detection result. It is an object rather than a parameter because it changes at run time and travels with the rest of the state.
 
 The objects and parameters lists stay separate because they behave differently at run time: objects are commanded or reported continuously and are subject to authority, the timeout and `estop`, while parameters are set occasionally, validated, versioned and stored. But a master renders both in one interface from one declaration, so a range is written the same way in either list.
 
-A value too large to travel in a control message — an image, an audio buffer — is declared with `"type": "resource"` naming an entry under `endpoints` (Section 7.5). The control message then carries the identity of what was uploaded, not the bytes.
-
-A value too large to travel in a control message — an image, an audio buffer — is declared with `"type": "resource"` naming an entry under `endpoints` (Section 7.5). The control message then carries the identity of what was uploaded, not the bytes.
+A value too large to travel in a control message — an image, an audio buffer — is declared with `"type": "resource"` naming an entry under `endpoints` (Section 7.5), or is uploaded as the object's binary state (Section 9.8). The control message then carries the identity of what was uploaded, not the bytes.
 
 **Devices compose from objects; they are not types.** A locomotive is an endpoint with one `motion` object and some `switch` objects. A maintenance vehicle is that same endpoint plus an `axis` for the boom, a `scalar` for the work light and a `switch` for the outriggers — and any master that understands `motion` still drives it as a locomotive without knowing what a crane is. This is precisely what DCC cannot express: there, a crane becomes F5 for up and F6 for down, because on and off are the only vocabulary available.
 
@@ -447,7 +445,7 @@ Where several implementers find themselves declaring the same extension, that is
 
 ### 7.7 Presentation
 
-Presentation lives in its own `ui` section of `/definition`, keyed by the `name` of an object or a parameter. Nothing about how a device looks appears in the declarations themselves.
+Presentation lives in its own `ui` section of `/definition`, keyed by the `id` of an object or the `name` of a parameter — both called *name* in the rest of this section. The two share one namespace: an object and a parameter MUST NOT have the same name. Nothing about how a device looks appears in the declarations themselves.
 
 The separation is what makes localisation and theming possible at all. `name` is an identifier — it is what a master matches on, what a control message carries, and what must survive translation — so it MUST NOT be shown to a user. The `ui` section is the part that changes with language, with a redesign, or with a master's preferences, and it can be replaced wholesale without touching a single declaration.
 
@@ -508,35 +506,43 @@ Two things are never translated: a `unit`, which is machine data a master may ne
 
 ### 8.1 `GET /config`
 
-Returns the current values of every parameter, plus `config_version`.
+Returns the running value of every parameter, plus `_meta`.
 
 ```json
 {
   "device_id": "a0:b7:65:12:34:56",
   "config": { "device_name": "drehscheibe", "control_timeout_ms": 2000 },
-  "_meta": { "config_version": 7 }
+  "_meta": { "config_version": 7, "dirty": true, "dirty_keys": ["control_timeout_ms"],
+             "restart_pending_keys": [] }
 }
 ```
 
-`config_version` MUST increment on every accepted write and is the concurrency token.
+| `_meta` field | Meaning |
+| --- | --- |
+| `config_version` | MUST increment on every accepted write. The concurrency token |
+| `dirty`, `dirty_keys` | The running value differs from the stored one: written without `persist`, and lost at the next power cycle |
+| `restart_pending_keys` | Parameters declared `"applies": "restart"` whose stored value is not yet the one running |
 
 ### 8.2 `POST /config` — Commit Semantics
 
 ```json
-{ "control_timeout_ms": 4000, "if_version": 7 }
+{ "control_timeout_ms": 4000, "persist": true, "if_version": 7 }
 ```
 
 | Rule | Behaviour |
 | --- | --- |
-| Application | Applies to the running system immediately |
-| Persistence | **Stored.** A write survives a power cycle, for every parameter declared `"persist": true`. There is no separate commit step and no volatile write |
-| Volatile parameters | A parameter declared `"persist": false` applies but is not stored, and returns to its default on reboot. This is a property of the parameter, never of the write |
+| Application | Applies to the running system immediately, except a parameter declared `"applies": "restart"` |
+| Persistence | `"persist": true` stores every key of the write, and it survives a power cycle. Without it the write applies to the running system only and is reported in `_meta.dirty_keys`: a master can try a value and discard it with a restart. There is no separate commit step; re-writing the same values with `persist` is the commit |
+| Restart parameters | A key declared `"applies": "restart"` MUST be written with `persist`, otherwise `requires_persist`: a value that is neither running nor stored could never take effect. Where the stored value then differs from the one running, the endpoint restarts **after** the response is sent |
+| Volatile parameters | A parameter declared `"persist": false` is never stored and returns to its default on reboot |
 | Atomicity | **All keys or none.** Validate everything first; on any failure apply nothing and list **every** offending key, not only the first |
 | Unknown keys | Rejected, `400`. Silently ignoring them makes a typo look like success |
-| Concurrency | `if_version` optional. Present and not equal to `config_version` gives `409` with the current config |
-| Reserved | `if_version` and `factory_reset` are control keys, never parameters |
+| Concurrency | `if_version` optional. Present and not equal to `config_version` gives `409 version_conflict` with the current config |
+| Reserved | `persist`, `if_version` and `factory_reset` are control keys, never parameters |
 | Response | `200`, body identical to `GET /config` |
 | Side effects | A change altering transport takes effect **after** the response is sent. A change to `device_name` re-announces SSDP and re-registers mDNS |
+
+A rejected key carries a `reason`: `unknown_key`, `wrong_type`, `out_of_range` (with `min` and `max`), `too_long` (with `max_len`), `not_allowed` (an enumeration, with `values`) or `requires_persist`.
 
 An endpoint SHOULD write storage only when the value actually changes, since a master re-sending an identical configuration must not cost a flash cycle.
 
@@ -555,7 +561,7 @@ An endpoint SHOULD write storage only when the value actually changes, since a m
 
 ### 8.3 Persistence
 
-One NVS namespace, `mrroip`. One key per persisted parameter, named identically to the parameter, so the mapping needs no table. In addition:
+One NVS namespace, `mrroip` — or on a host with a file system, one file per endpoint holding the same keys. One key per persisted parameter, named identically to the parameter, so the mapping needs no table; where the store limits key length (NVS: 15 characters) the implementation abbreviates, and records the mapping next to the parameter table. In addition:
 
 | Key | Purpose |
 | --- | --- |
@@ -579,23 +585,26 @@ It is also why `/control` and `/state` share a vocabulary: the master asks for w
 `POST /control`, and the byte-identical JSON as a UDP datagram to the control port:
 
 ```json
-{ "seq": 1043, "ts": 88123,
-  "objects": { "bridge": { "position": "track7" }, "lamp": "on" } }
+{ "seq": 1043, "ts": 88123, "mode": "operate",
+  "objects": { "bridge": 7, "lamp": "on" } }
 ```
 
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `seq` | yes | Monotonic per master. Echoed. Detects loss; **never** used to sequence actions |
 | `ts` | no | Master's monotonic milliseconds. Echoed. One-way delay estimation only; clocks are not synchronised |
-| `mode` | no | One of the three core operations of Section 9.3. **Not** a device behaviour — those are objects |
-| `objects` | no | Desired state of the named objects only. Objects not named are left unchanged |
-| `hold` | no | `true` refreshes authority without changing anything |
+| `mode` | yes | One of the four core operations of Section 9.3, or one of the profile's `capabilities.modes` |
+| `target` | where the mode requires one | The object or value a mode acts on, for profile modes that declare one. Given to any other mode, `unknown_target`; missing where required, `missing_target` |
+| `objects` | no | Desired state of the named objects only. Objects not named are left unchanged. Accepted only with a profile mode, otherwise `unexpected_objects` |
+| `hold` | no | `true` refreshes authority without changing anything, whatever the mode |
 
-**There are no device-specific modes.** Behaviour a master selects — a cable car shuttling rather than idle, a locomotive in shunting response rather than normal — is an object with declared states, like everything else it can set. A mode enumeration is the one thing in this specification that would escape the grammar of Section 7: a bare list of strings with no type, no range and no declared meaning, which a master can neither validate nor render. Expressing the same thing as an object costs nothing and gains both.
+A missing `seq` or `mode` gives `missing_field`, with the name of the field in `field`.
 
-It also composes. A mode is one value at a time, so the moment a device has two independent behaviours the enumeration has to carry their product; objects are orthogonal by construction.
+**Profile modes.** A profile MAY declare modes of its own in `capabilities.modes` — a display showing an image or blinking it, a cable car shuttling or parked. A mode is the device's overall behaviour and is itself a desired state: sending `blink` to a display already blinking changes nothing. Everything a mode carries beyond its name — which image, what speed — is an object.
 
-**`objects` is a partial map.** A control message names only the objects whose state the master wants to change; every object it omits keeps the state it has. A locomotive repeating a speed setpoint at 5 Hz therefore sends `mode` and `drive` and nothing else, rather than restating twenty function outputs sixty times a second.
+Modes are kept few. Whatever has a type, a range or more than one independent value SHOULD be an object rather than a mode, because a mode is a bare string a master can validate but not render, and because modes do not compose: two independent behaviours as one enumeration must carry their product, while objects are orthogonal by construction.
+
+**`objects` is a partial map.** A control message names only the objects whose state the master wants to change; every object it omits keeps the state it has. A locomotive repeating a speed setpoint at 5 Hz therefore sends `seq`, `mode` and `drive` and nothing else, rather than restating twenty function outputs sixty times a second.
 
 This appears to weaken Section 9.1, since a partial message no longer carries the whole desired state and a lost datagram changing one output is simply lost. It does not, because the reconciliation runs the other way: every response and every `/state` poll reports **all** object states (Section 9.4). A master compares what it wanted with what is reported and re-sends only the difference. Correction is therefore driven by observed divergence rather than by repetition, which costs one comparison per response and no bandwidth at all in the common case where nothing has diverged.
 
@@ -607,13 +616,12 @@ Every endpoint MUST implement these four, whatever its profile:
 
 | `mode` | Meaning |
 | --- | --- |
-| `estop` | Halt everything **immediately**. Latches; requires `reset`. Honoured from the UDP path with no handshake, and takes priority over anything in flight |
-| `reset` | Clear a latched `estop` or fault. Returns to the profile's rest state |
+| `estop` | Halt everything **immediately**. Latches; requires `reset`. Honoured from the UDP path with no handshake, takes priority over anything in flight, and is exempt from the replay check of Section 9.5 |
+| `reset` | Clear a latched `estop` or fault. Returns to the profile's rest state, and `state.mode` to its rest mode |
 | `release` | The master relinquishes authority (Section 11) |
+| `hold` | Refresh authority and change nothing. What a master sends to keep authority, or to establish itself (Section 9.7), without restating a desired state |
 
-These three are the whole of `mode`, they are the same on every endpoint, and a master MUST be able to issue them without knowing anything about the device. That is exactly why they cannot be objects: an object vocabulary is declared per device, and an emergency stop that depended on reading `/definition` first would be no emergency stop at all.
-
-There is no `hold`. A control message naming no objects changes nothing and refreshes authority, which is what `hold` meant.
+These four are the same on every endpoint, are listed in `capabilities.core_modes`, and a master MUST be able to issue them without knowing anything about the device. That is exactly why they cannot be objects or profile modes: an object vocabulary is declared per device, and an emergency stop that depended on reading `/definition` first would be no emergency stop at all. A profile MUST NOT declare a core mode among its own.
 
 ### 9.4 The Response
 
@@ -626,17 +634,19 @@ The body is identical for HTTP and UDP; on UDP it is returned to the sender's ad
   "ts": 88123,
   "accepted": true,
   "state": {
+    "mode": "operate",
     "authority": "commanded",
     "busy": true,
     "fault": null,
     "uptime_ms": 903412,
-    "profile": { "phase": "slewing", "bridge": 172.4, "lamp": "on" }
+    "profile": { "phase": "slewing", "bridge": 7, "lamp": "on" }
   }
 }
 ```
 
 | State field | Owner |
 | --- | --- |
+| `mode` | Core. The mode last applied: a profile mode, `estop` while latched, or the rest mode after start, `reset` and coming to rest on loss of the master (Section 11.3) |
 | `authority`, `fault`, `uptime_ms` | Core |
 | `busy` | Core. True when the endpoint is doing something a master should wait for. The profile decides what counts |
 | `profile` | Profile. Opaque to core |
@@ -649,25 +659,31 @@ A rejection takes the same shape:
   "error": "latched_estop", "state": { "...": "..." } }
 ```
 
+An object the profile refuses gives `invalid_object_state` with `details`, one entry per refused object, in the shape of Section 8.2: `{ "key": "bridge", "reason": "out_of_range" }`. The profile chooses the reasons. As in `/config`, every object is checked before any is applied.
+
 ### 9.5 Sequence Numbers and Replay
 
-An endpoint MUST track `last_seq` per master address. A datagram whose `seq` is less than or equal to `last_seq`, arriving within 5 s of the last accepted message, is a reordered duplicate: it MUST be ignored, with `accepted:false, error:"stale_seq"`. A gap of more than 5 s means the master restarted its counter, and the endpoint MUST accept and re-anchor. Without that carve-out a master reboot locks itself out until the endpoint is power-cycled.
+An endpoint MUST track `last_seq` per master address. A datagram whose `seq` is less than or equal to `last_seq`, arriving within 5 s of the last accepted message, is a reordered duplicate: it MUST be ignored, with `accepted:false, error:"stale_seq"` (HTTP `409`). `estop` is never refused as stale: a master that lost count must still be able to stop the layout. A gap of more than 5 s means the master restarted its counter, and the endpoint MUST accept and re-anchor. Without that carve-out a master reboot locks itself out until the endpoint is power-cycled.
 
 ### 9.6 `GET /state`
 
 Returns the `state` object of 9.4 alone. It MUST have no side effects and MUST NOT acquire authority.
 
+`/state` MAY carry diagnostic fields the control response does not — `free_heap` in bytes, `network` (`ethernet`, `wifi`, `setup_ap`, `none`) — so that a master or a soak test can watch an endpoint's health. They MUST NOT appear in a control response, which has to be identical on both transports (Section 5.4).
+
 Polling `/state` MUST NOT count as a control message. Monitoring and commanding are different acts; conflating them makes the timeout rule unanalysable, because a master that is merely watching would silently keep authority alive.
 
 ### 9.7 Unsolicited Reporting
 
-An endpoint MUST be able to report its state without being asked.
+An endpoint MAY report its state without being asked, and one that does declares `"reporting": true` in `capabilities`. A master MUST work with an endpoint that does not, by polling `/state`.
+
+> This section was a MUST in earlier drafts. No implementation reports yet, and the conformance suite does not test it; it becomes a requirement again once one does and a test exists. What follows is how an endpoint that reports MUST do it.
 
 Polling suffices for a device whose state changes only when a master changes it. It does not suffice for an endpoint that observes something, because there the endpoint is the source of truth and the master is the party that needs telling. At a 5 Hz poll an occupancy edge is up to 200 ms old before anyone sees it, and twenty polled endpoints cost a hundred requests a second to establish that nothing has happened.
 
 This is not a property of a category of device. An object declared `"access": "state"` may appear on any endpoint: a switch decoder reading the end position of each turnout reports whether the turnout actually moved, from the same endpoint that commanded it, and a master can verify the move instead of assuming it.
 
-**Establishing the destination.** After discovery a master sends one control message to each endpoint — `a message naming no objects` suffices — and the endpoint records the source address. There is no subscription protocol and no configured collector: `device_id` identifies the origin of every report, so a master needs one open socket and no bookkeeping. The relationship expires with `control_timeout_ms`, which for an endpoint whose objects are all inputs means "stop reporting" rather than "release control". An endpoint that joins the network later is contacted after its next `ssdp:alive`.
+**Establishing the destination.** After discovery a master sends one control message to each endpoint — `hold` suffices — and the endpoint records the source address. There is no subscription protocol and no configured collector: `device_id` identifies the origin of every report, so a master needs one open socket and no bookkeeping. The relationship expires with `control_timeout_ms`, which for an endpoint whose objects are all inputs means "stop reporting" rather than "release control". An endpoint that joins the network later is contacted after its next `ssdp:alive`.
 
 **The report.** The Section 9.4 envelope without `ack_seq`, sent to the recorded address on the endpoint's control port. Full state, never a delta, so a lost datagram heals on the next report instead of leaving the master permanently out of step.
 
@@ -679,26 +695,43 @@ An endpoint declares `reporting` in `capabilities` and `report_interval_s` among
 
 **Loss of contact is the master's to surface.** An endpoint that stops answering has usually not failed quietly: a vehicle has stalled or derailed, a module has lost power, a cable has come out. A master SHOULD tell the user when an endpoint it was in contact with goes silent, rather than leaving a device that has stopped responding indistinguishable from one that has nothing to say. The heartbeat above exists so that this is detectable without polling.
 
+### 9.8 Binary Object States — `PUT /objects/{id}`
+
+Some desired states are too large for a control message: a frame of pixels, a sound. An endpoint that has such objects declares `"objects": "/objects/{id}"` under `endpoints` and accepts the state as the raw body of `PUT /objects/<id>`, `Content-Type: application/octet-stream`, up to the `max_bytes` the object declares.
+
+| Carried in | Meaning |
+| --- | --- |
+| `X-MRROIP-Seq` header | Required. The control `seq` of Section 9.5, from the same counter; missing gives `missing_field` |
+| `X-MRROIP-Base` header | Optional. The identity of the state the upload modifies, for a partial update; the profile defines it |
+| Query string | Profile-defined integers or strings, e.g. the rectangle `?x=0&y=40&w=240&h=40` |
+
+An upload **is** a control message: the replay check, authority, `authority_taken_from` and the `estop` and fault latches apply exactly as for `/control`, and are checked before the body is read. A refusal is answered at once, and the endpoint closes the connection rather than reading a body it will not use. An accepted upload is answered when the body is over, with the Section 9.4 response; if fewer bytes arrive than `Content-Length` announced, `accepted` is `false` and the error `incomplete_body`.
+
 ## 10. Error Model
 
 | HTTP | Body `error` | Condition |
 | --- | --- | --- |
-| 400 | `malformed_json` | Unparseable body |
+| 400 | `malformed_json` | Unparseable body, or not a JSON object |
+| 400 | `missing_field` | A required field is absent; `field` names it |
 | 400 | `validation_failed` | `/config`, with `details[]` |
-| 400 | `unknown_mode` | Not one of the three core operations of Section 9.3 |
-| 400 | `unknown_object` | An `objects` entry names something the endpoint does not have, or a value outside what that object declared |
+| 400 | `unknown_mode` | Neither a core operation (Section 9.3) nor a declared profile mode |
+| 400 | `unknown_target` / `missing_target` | `target` given to a mode that takes none, or missing where the mode requires one |
+| 400 | `unexpected_objects` | `objects` with a core mode |
+| 400 | `invalid_object_state` | An `objects` entry the profile refuses — an object it does not have, or a value outside its declaration — with `details[]`; also a refused upload (Section 9.8) |
+| 400 | `incomplete_body` | An upload ended before `Content-Length` bytes arrived |
 | 404 | `not_found` | Unknown path |
 | 405 | `method_not_allowed` | Wrong verb |
 | 409 | `version_conflict` | Stale `if_version`; body carries the current config |
+| 409 | `stale_seq` | Replayed or reordered `seq` (Section 9.5) |
 | 409 | `latched_estop` / `latched_fault` | Command refused while latched |
-| 413 | `body_too_large` | Over 4096 bytes |
+| 413 | `body_too_large` | Over 4096 bytes, or over the path's declared `max_bytes` |
 | 503 | `not_ready` | Still bringing up |
 
 UDP carries no status code, so `accepted: false` plus `error` conveys it. The strings MUST be identical on both transports; a master must not need two error tables.
 
 ### 10.1 Latched Faults
 
-A fault is **latched**: once raised it persists until an explicit `reset`, even if the underlying condition clears. While latched, the endpoint MUST refuse the object changes its profile declares incompatible, returning `latched_fault`. The profile defines the complete fault set, how each is detected, and what `reset` does to clear it (Section 14, item 7).
+A fault is **latched**: once raised it persists until an explicit `reset`, even if the underlying condition clears. While latched, the endpoint MUST refuse profile modes and object changes, returning `latched_fault`; the core operations of Section 9.3 remain available. The profile defines the complete fault set, how each is detected, and what `reset` does to clear it (Section 14, item 7).
 
 A latched `estop` MUST survive every authority transition. Loss of a master MUST NOT clear a safety stop.
 
@@ -714,7 +747,7 @@ A latched `estop` MUST survive every authority transition. Loss of a master MUST
 
 ### 11.2 Acquiring and Holding
 
-Any accepted control message sets `authority = commanded` and records the master's address and the time. A master holds authority by repeating its message at 1 Hz or faster, which it is doing anyway because the message is a desired state. `A message naming no objects refreshes authority without changing anything.`
+Any accepted control message sets `authority = commanded` and records the master's address and the time. A master holds authority by repeating its message at 1 Hz or faster, which it is doing anyway because the message is a desired state. `hold`, or `"hold": true` on any message, refreshes authority without changing anything.
 
 One master commands at a time. A control message from a different address while authority is held **MUST be accepted**, and authority transfers, but the response MUST carry `"authority_taken_from": "<previous address>"` so that a client can notice. Locking would require an arbitration scheme this specification does not define, and a layout running two throttles by accident should be diagnosable rather than mysteriously dead.
 
@@ -825,7 +858,7 @@ Two questions remain open. The others raised in review have been answered in the
 The five questions this specification originally put back to its working draft are now all answered in the normative text, and are listed here only so that a reader meeting the older draft can see what changed.
 
 1. **Does the 2 s timeout apply to an endpoint that moves on its own?** No. The timeout is armed only while a master holds authority, and dispatches on `device_class` (Section 11.3). A master SHOULD additionally notify the user when an endpoint goes silent (Section 9.7), since a stalled vehicle is the common cause.
-2. **Does a configuration write apply, persist, or need a commit?** It applies and persists. There is no commit step (Section 8.2).
+2. **Does a configuration write apply, persist, or need a commit?** It applies; it persists when the write says `persist`. There is no separate commit step (Section 8.2).
 3. **Is a control message a setpoint or an event?** A setpoint. A message applies the properties named in it and leaves everything else alone (Sections 9.1, 9.2).
 4. **Are endpoint classes part of the standard?** The mechanism is; the classes themselves move to a separate device-class specification (Section 4.2).
 5. **Where does device-specific behaviour live?** In a profile, published as its own document (Section 14).
@@ -843,10 +876,10 @@ Run by `mrroip_probe.py` against any endpoint, whatever its profile, using disco
 | C-5 | Identity | `device_id` is the station MAC; unchanged after a rename |
 | C-6 | `/definition` shape | All required keys; every numeric parameter has a range, every string a `max_len` |
 | C-7 | Class declared | `device_class` is one of the three; `device_type` and `profile_version` present |
-| C-8 | Core operations | `estop`, `reset` and `release` are accepted; no other `mode` value is |
+| C-8 | Core operations | `capabilities.core_modes` is exactly `estop`, `reset`, `release`, `hold`; `capabilities.modes` repeats none of them |
 | C-9 | Definition ↔ config | Key sets identical |
-| C-10 | Config applies | Write, then `GET /config` shows the new value and `config_version` has incremented |
-| C-11 | ★ Persistence | A written value survives a reboot. A parameter declared `"persist": false` returns to its default |
+| C-10 | Config applies | Write without `persist`, then `GET /config` shows the new value, `config_version` has incremented and `_meta.dirty_keys` names it |
+| C-11 | ★ Persistence | A value written with `persist` survives a reboot; one written without it does not |
 | C-12 | Atomicity | One valid plus one invalid key gives `400`, both listed, **neither applied** |
 | C-13 | Unknown key | `400`, `unknown_key`, nothing applied |
 | C-14 | Range check | Below `min` and above `max` rejected; the bound itself accepted |
@@ -855,7 +888,7 @@ Run by `mrroip_probe.py` against any endpoint, whatever its profile, using disco
 | C-17 | Seq echo | `ack_seq` matches, on both transports |
 | C-18 | Replay | Duplicate `seq` gives `stale_seq`; after a 5 s gap a lower `seq` is accepted |
 | C-19 | Transport parity | Identical JSON over HTTP and UDP gives identical `state` |
-| C-20 | Unknown mode | A `mode` outside the three core operations gives `400 unknown_mode` |
+| C-20 | Unknown mode | A `mode` neither core nor declared gives `400 unknown_mode`, on both transports |
 | C-21 | ★ Timeout by class | `mobile` stops; `stationary` with a programme continues as `autonomous`; `passive` holds |
 | C-22 | ★ Unattended | With no control message ever sent, the endpoint does what its class says, indefinitely |
 | C-23 | Release | `release` drops authority **immediately**, without waiting out the timeout |
@@ -878,14 +911,14 @@ Four core tests — C-16, C-21, C-22 and C-24 — are generic in principle but n
 
 | Hook | Meaning |
 | --- | --- |
-| `activate` | An object setting that makes the endpoint busy for a while |
-| `rest` | An object setting that returns it to rest |
+| `activate` | A profile mode that makes the endpoint busy for a while |
+| `rest` | A mode that returns it to rest |
 | `counter` | A field in `state.profile` counting completed activities |
 | `cycle_seconds(d)` | Roughly how long one activity takes, for sizing waits |
 | `prepare_fast(d)` | Configure short cycles so that tests take seconds, not minutes |
 | `provoke_fault(d)` | Put the device into `state.fault`, or return false |
 
-Without a profile module these four **skip**, with a note saying so. They MUST NOT guess an object name or a value: a core suite that invents `"drive"` tests the profile it imagined rather than the endpoint in front of it, and a green run would mean nothing.
+Without a profile module these four **skip**, with a note saying so. They MUST NOT guess a mode, an object name or a value: a core suite that invents `"drive"` tests the profile it imagined rather than the endpoint in front of it, and a green run would mean nothing.
 
 ## Appendix B. Document History
 
@@ -896,6 +929,7 @@ Without a profile module these four **skip**, with a note saying so. They MUST N
 | 2026-09-17 | Colour display endpoint: bulk upload path, tile CRC table, RTP stream receiver. Both display variants pass one probe file |
 | 2026-09-18 | This document: the three sources consolidated into one numbered specification; name settled as MRRoIP; profiles moved out to their own documents |
 | 2026-09-28 | Name corrected to MRRoIP (two Rs: Model RailRoad) throughout the implementations and the wire. This document replaces `MRROIP-1.md` rev 1.0, which is removed; its section numbering survives for Sections 5 to 11, 13 and 14, while identity moved to 2.4 and 5.1, device classes to 4.2, encoding to 2.3, persistence to 8.3 and the conformance tests to Appendix A |
+| 2026-09-28 | Text reconciled with the reference implementation and the conformance suite, where the two disagreed: profile modes and `hold` (9.2, 9.3), `mode` required, per-write `persist` with `_meta.dirty_keys` and `applies: "restart"` (7.2, 8), objects keyed by `id`, `state.mode`, the full error table (10), binary object states (9.8), a non-default HTTP port (5.3). Unsolicited reporting (9.7) made optional until implemented and tested |
 
 ### B.1 Measured Results Referenced Above
 

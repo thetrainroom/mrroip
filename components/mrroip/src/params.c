@@ -219,6 +219,14 @@ static cJSON *config_json_locked(const char *device_id)
     return root;
 }
 
+uint32_t params_config_version(void)
+{
+    xSemaphoreTake(lock, portMAX_DELAY);
+    uint32_t version = config_version;
+    xSemaphoreGive(lock);
+    return version;
+}
+
 cJSON *params_config_json(const char *device_id)
 {
     xSemaphoreTake(lock, portMAX_DELAY);

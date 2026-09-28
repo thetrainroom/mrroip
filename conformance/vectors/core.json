@@ -1,0 +1,1566 @@
+{
+ "cases": [
+  {
+   "name": "definition skeleton",
+   "steps": [
+    {
+     "get": "/definition",
+     "expect": {
+      "status": 200,
+      "body": {
+       "proto": "MRRoIP",
+       "proto_version": "0.1",
+       "device_id": "$any",
+       "device_name": "reference",
+       "device_type": "reference",
+       "device_class": "passive",
+       "profile_version": "1.0",
+       "firmware": "$any",
+       "endpoints": {
+        "definition": "/definition",
+        "config": "/config",
+        "control": "/control",
+        "state": "/state",
+        "udp_control_port": 5300
+       },
+       "capabilities": {
+        "autonomous": false,
+        "commanded": true,
+        "modes": [
+         "off",
+         "on",
+         "blink"
+        ],
+        "core_modes": [
+         "estop",
+         "reset",
+         "release",
+         "hold"
+        ]
+       },
+       "objects": {
+        "$contains": [
+         {
+          "id": "level",
+          "type": "int",
+          "min": 0,
+          "max": 100,
+          "default": 100,
+          "unit": "%"
+         },
+         {
+          "id": "blink_starts",
+          "access": "state",
+          "type": "int"
+         }
+        ]
+       },
+       "parameters": {
+        "$contains": [
+         {
+          "name": "device_name",
+          "type": "string",
+          "default": "reference",
+          "max_len": 31,
+          "persist": true
+         },
+         {
+          "name": "control_timeout_ms",
+          "type": "int",
+          "default": 2000,
+          "min": 500,
+          "max": 30000,
+          "unit": "ms",
+          "persist": true
+         },
+         {
+          "name": "udp_port",
+          "type": "int",
+          "default": 5300,
+          "min": 1024,
+          "max": 65535,
+          "persist": true
+         },
+         {
+          "name": "announce_interval_s",
+          "type": "int",
+          "default": 300,
+          "min": 0,
+          "max": 86400,
+          "unit": "s",
+          "persist": true
+         },
+         {
+          "name": "blink_period_ms",
+          "type": "int",
+          "default": 500,
+          "min": 50,
+          "max": 5000,
+          "unit": "ms"
+         },
+         {
+          "name": "programme_blinks",
+          "type": "int",
+          "default": 4,
+          "min": 1,
+          "max": 100
+         },
+         {
+          "name": "simulate_fault",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 1
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "stationary declares autonomy",
+   "class": "stationary",
+   "steps": [
+    {
+     "get": "/definition",
+     "expect": {
+      "status": 200,
+      "body": {
+       "device_class": "stationary",
+       "capabilities": {
+        "autonomous": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "config at start",
+   "steps": [
+    {
+     "get": "/config",
+     "expect": {
+      "status": 200,
+      "body": {
+       "device_id": "$any",
+       "config": {
+        "device_name": "reference",
+        "control_timeout_ms": 2000,
+        "udp_port": 5300,
+        "announce_interval_s": 300,
+        "blink_period_ms": 500,
+        "programme_blinks": 4,
+        "simulate_fault": 0
+       },
+       "_meta": {
+        "config_version": 0,
+        "dirty": false,
+        "dirty_keys": [],
+        "restart_pending_keys": []
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "write without persist is dirty",
+   "steps": [
+    {
+     "config": {
+      "blink_period_ms": 200
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "config": {
+        "blink_period_ms": 200
+       },
+       "_meta": {
+        "config_version": 1,
+        "dirty": true,
+        "dirty_keys": [
+         "blink_period_ms"
+        ]
+       }
+      }
+     }
+    },
+    {
+     "get": "/config",
+     "expect": {
+      "status": 200,
+      "body": {
+       "config": {
+        "blink_period_ms": 200
+       },
+       "_meta": {
+        "dirty": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "write with persist is clean",
+   "steps": [
+    {
+     "config": {
+      "blink_period_ms": 200,
+      "persist": true
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "config": {
+        "blink_period_ms": 200
+       },
+       "_meta": {
+        "config_version": 1,
+        "dirty": false,
+        "dirty_keys": []
+       }
+      }
+     }
+    },
+    {
+     "config": {
+      "blink_period_ms": 300
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "_meta": {
+        "config_version": 2,
+        "dirty_keys": [
+         "blink_period_ms"
+        ]
+       }
+      }
+     }
+    },
+    {
+     "config": {
+      "blink_period_ms": 300,
+      "persist": true
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "_meta": {
+        "config_version": 3,
+        "dirty": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "atomic: one bad key applies nothing",
+   "steps": [
+    {
+     "config": {
+      "blink_period_ms": 200,
+      "udp_port": 1
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "validation_failed",
+       "applied": false,
+       "details": [
+        {
+         "key": "udp_port",
+         "reason": "out_of_range",
+         "min": 1024,
+         "max": 65535
+        }
+       ]
+      }
+     }
+    },
+    {
+     "get": "/config",
+     "expect": {
+      "status": 200,
+      "body": {
+       "config": {
+        "blink_period_ms": 500,
+        "udp_port": 5300
+       },
+       "_meta": {
+        "config_version": 0
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "every bad key is listed",
+   "steps": [
+    {
+     "config": {
+      "blink_period_ms": 1,
+      "zzz": 1
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "validation_failed",
+       "applied": false,
+       "details": {
+        "$contains": [
+         {
+          "key": "blink_period_ms",
+          "reason": "out_of_range",
+          "min": 50,
+          "max": 5000
+         },
+         {
+          "key": "zzz",
+          "reason": "unknown_key"
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "bounds are inclusive",
+   "steps": [
+    {
+     "config": {
+      "blink_period_ms": 50
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "config": {
+      "blink_period_ms": 5000
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "config": {
+      "blink_period_ms": 49
+     },
+     "expect": {
+      "status": 400
+     }
+    },
+    {
+     "config": {
+      "blink_period_ms": 5001
+     },
+     "expect": {
+      "status": 400
+     }
+    }
+   ]
+  },
+  {
+   "name": "wrong type",
+   "steps": [
+    {
+     "config": {
+      "blink_period_ms": "fast"
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "validation_failed",
+       "details": [
+        {
+         "key": "blink_period_ms",
+         "reason": "wrong_type"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "config": {
+      "device_name": 7
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "details": [
+        {
+         "key": "device_name",
+         "reason": "wrong_type"
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "string too long",
+   "steps": [
+    {
+     "config": {
+      "device_name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "validation_failed",
+       "details": [
+        {
+         "key": "device_name",
+         "reason": "too_long",
+         "max_len": 31
+        }
+       ]
+      }
+     }
+    },
+    {
+     "config": {
+      "device_name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "config": {
+        "device_name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "if_version",
+   "steps": [
+    {
+     "config": {
+      "blink_period_ms": 200,
+      "if_version": 0
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "_meta": {
+        "config_version": 1
+       }
+      }
+     }
+    },
+    {
+     "config": {
+      "blink_period_ms": 300,
+      "if_version": 0
+     },
+     "expect": {
+      "status": 409,
+      "body": {
+       "error": "version_conflict",
+       "config": {
+        "blink_period_ms": 200
+       },
+       "_meta": {
+        "config_version": 1
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "malformed config",
+   "steps": [
+    {
+     "config": "{\"blink_period_ms\":",
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "malformed_json"
+      }
+     }
+    },
+    {
+     "config": "[1,2]",
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "malformed_json"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "seq is required",
+   "steps": [
+    {
+     "control": {
+      "mode": "on"
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "missing_field",
+       "field": "seq"
+      }
+     }
+    },
+    {
+     "udp": {
+      "mode": "on"
+     },
+     "expect": {
+      "body": {
+       "accepted": false,
+       "error": "missing_field",
+       "field": "seq"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode is required",
+   "steps": [
+    {
+     "control": {
+      "seq": 1
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "missing_field",
+       "field": "mode"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "unknown mode, both transports",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "zzz"
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "unknown_mode"
+      }
+     }
+    },
+    {
+     "udp": {
+      "seq": 2,
+      "mode": "zzz"
+     },
+     "expect": {
+      "body": {
+       "accepted": false,
+       "error": "unknown_mode"
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 3,
+      "mode": 42
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "unknown_mode"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "malformed control",
+   "steps": [
+    {
+     "control": "{\"seq\":1,",
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "malformed_json"
+      }
+     }
+    },
+    {
+     "udp": "\u0000\u0001garbage",
+     "expect": {
+      "body": {
+       "accepted": false,
+       "error": "malformed_json"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "objects need a profile mode",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "hold",
+      "objects": {
+       "level": 10
+      }
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "unexpected_objects"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "no mode takes a target",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on",
+      "target": "x"
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "unknown_target"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "seq and ts echoed",
+   "steps": [
+    {
+     "control": {
+      "seq": 424242,
+      "ts": 77,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "device_id": "$any",
+       "ack_seq": 424242,
+       "ts": 77,
+       "accepted": true
+      }
+     }
+    },
+    {
+     "udp": {
+      "seq": 424243,
+      "ts": 78,
+      "mode": "hold"
+     },
+     "expect": {
+      "body": {
+       "ack_seq": 424243,
+       "ts": 78,
+       "accepted": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a profile mode applies",
+   "steps": [
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "mode": "off",
+       "authority": "idle",
+       "busy": false,
+       "fault": null,
+       "uptime_ms": "$any",
+       "profile": {
+        "lamp": "off",
+        "level": 100,
+        "blink_starts": 0
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on",
+      "objects": {
+       "level": 40
+      }
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "accepted": true,
+       "state": {
+        "mode": "on",
+        "authority": "commanded",
+        "busy": false,
+        "fault": null,
+        "profile": {
+         "lamp": "on",
+         "level": 40
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "hold refreshes and changes nothing",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "blink",
+      "hold": true
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "mode": "on",
+        "busy": false
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 3,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "mode": "on",
+        "authority": "commanded"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "desired state is idempotent",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "blink"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "busy": true,
+        "profile": {
+         "blink_starts": 1
+        }
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "blink"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "profile": {
+         "blink_starts": 1
+        }
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 3,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "busy": false
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 4,
+      "mode": "blink"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "profile": {
+         "blink_starts": 2
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "object refused, nothing applied",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on",
+      "objects": {
+       "level": 30
+      }
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "blink",
+      "objects": {
+       "level": 101
+      }
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "accepted": false,
+       "error": "invalid_object_state",
+       "details": [
+        {
+         "key": "level",
+         "reason": "out_of_range"
+        }
+       ],
+       "state": {
+        "mode": "on",
+        "profile": {
+         "level": 30
+        }
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 3,
+      "mode": "on",
+      "objects": {
+       "level": "high",
+       "zzz": 1
+      }
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "invalid_object_state",
+       "details": {
+        "$contains": [
+         {
+          "key": "level",
+          "reason": "wrong_type"
+         },
+         {
+          "key": "zzz",
+          "reason": "unknown_object"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 4,
+      "mode": "on",
+      "objects": {
+       "blink_starts": 5
+      }
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "error": "invalid_object_state"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "stale seq within 5 s, re-anchored after",
+   "steps": [
+    {
+     "control": {
+      "seq": 900000,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 900000,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 409,
+      "body": {
+       "accepted": false,
+       "error": "stale_seq",
+       "ack_seq": 900000
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 899999,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 409,
+      "body": {
+       "accepted": false,
+       "error": "stale_seq"
+      }
+     }
+    },
+    {
+     "advance_ms": 5001
+    },
+    {
+     "control": {
+      "seq": 5,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "accepted": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "seq is per sender",
+   "steps": [
+    {
+     "control": {
+      "seq": 100,
+      "mode": "hold"
+     },
+     "peer": "10.0.0.1",
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 1,
+      "mode": "hold"
+     },
+     "peer": "10.0.0.2",
+     "expect": {
+      "status": 200
+     }
+    }
+   ]
+  },
+  {
+   "name": "estop is never stale",
+   "steps": [
+    {
+     "control": {
+      "seq": 100,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "udp": {
+      "seq": 1,
+      "mode": "estop"
+     },
+     "expect": {
+      "body": {
+       "accepted": true,
+       "state": {
+        "mode": "estop"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "estop latches until reset",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "blink"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "busy": true
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "estop"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "mode": "estop",
+        "busy": false,
+        "profile": {
+         "lamp": "off"
+        }
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 3,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 409,
+      "body": {
+       "accepted": false,
+       "error": "latched_estop"
+      }
+     }
+    },
+    {
+     "advance_ms": 4000
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "mode": "estop",
+       "busy": false,
+       "profile": {
+        "lamp": "off"
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 4,
+      "mode": "reset"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "mode": "off",
+        "fault": null
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 5,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "mode": "on"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "simulated fault latches until reset",
+   "steps": [
+    {
+     "config": {
+      "simulate_fault": 1
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "fault": "simulated",
+       "profile": {
+        "lamp": "off"
+       }
+      }
+     }
+    },
+    {
+     "config": {
+      "simulate_fault": 0
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 409,
+      "body": {
+       "accepted": false,
+       "error": "latched_fault",
+       "state": {
+        "fault": "simulated"
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 3,
+      "mode": "reset"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "fault": null,
+        "mode": "off"
+       }
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 4,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200
+     }
+    }
+   ]
+  },
+  {
+   "name": "takeover is accepted and visible",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on"
+     },
+     "peer": "10.0.0.1",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority_taken_from": "$absent"
+      }
+     }
+    },
+    {
+     "control": {
+      "seq": 1,
+      "mode": "off"
+     },
+     "peer": "10.0.0.2",
+     "expect": {
+      "status": 200,
+      "body": {
+       "accepted": true,
+       "authority_taken_from": "10.0.0.1",
+       "state": {
+        "authority": "commanded"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "state polling does not hold authority",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "hold"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "authority": "commanded"
+       }
+      }
+     }
+    },
+    {
+     "advance_ms": 1000
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "commanded"
+      }
+     }
+    },
+    {
+     "advance_ms": 1000
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "advance_ms": 500
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "idle"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "passive holds its state on timeout",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on",
+      "objects": {
+       "level": 60
+      }
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "advance_ms": 2500
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "idle",
+       "profile": {
+        "lamp": "on",
+        "level": 60
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "passive release is immediate",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "release"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "authority": "idle",
+        "profile": {
+         "lamp": "on"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "mobile stops on timeout",
+   "class": "mobile",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "blink"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "busy": true
+       }
+      }
+     }
+    },
+    {
+     "advance_ms": 2500
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "idle",
+       "busy": false,
+       "profile": {
+        "lamp": "off"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "mobile stops on release",
+   "class": "mobile",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "release"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "authority": "idle",
+        "profile": {
+         "lamp": "off"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "stationary runs its programme without a master",
+   "class": "stationary",
+   "steps": [
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "autonomous",
+       "busy": true
+      }
+     }
+    },
+    {
+     "advance_ms": 6000
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "autonomous",
+       "busy": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "stationary resumes its programme on timeout",
+   "class": "stationary",
+   "steps": [
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "authority": "commanded",
+        "busy": false
+       }
+      }
+     }
+    },
+    {
+     "advance_ms": 2500
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "autonomous",
+       "busy": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "stationary programme counts repetitions",
+   "class": "stationary",
+   "steps": [
+    {
+     "config": {
+      "blink_period_ms": 100,
+      "programme_blinks": 1
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 1,
+      "mode": "on"
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "control": {
+      "seq": 2,
+      "mode": "release"
+     },
+     "expect": {
+      "status": 200,
+      "body": {
+       "state": {
+        "authority": "autonomous",
+        "busy": true
+       }
+      }
+     }
+    },
+    {
+     "advance_ms": 1000
+    },
+    {
+     "get": "/state",
+     "expect": {
+      "status": 200,
+      "body": {
+       "authority": "autonomous"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -39,6 +39,8 @@ void params_get_str(const char *name, char *out, size_t size);
 
 // Entries of /definition "parameters"
 void params_emit_definition(struct cJSON *array);
+// _meta.config_version: changes with every accepted write
+uint32_t params_config_version(void);
 // Body of GET /config (§8.1)
 struct cJSON *params_config_json(const char *device_id);
 

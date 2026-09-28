@@ -52,6 +52,9 @@ void profile_estop(void);
 void profile_reset(void);
 // Loss of the master for mobile and stationary devices without a programme (§11.3); passive devices hold
 void profile_come_to_rest(void);
+// Loss of the master for a profile with an autonomous programme (§11.3): resume it. Optional; the weak default
+// does nothing, for profiles whose programme never stops for a master.
+void profile_resume(void);
 
 // Binary object states, uploaded with PUT /objects/<id> (plan question 16): pixel data too large for a JSON
 // message. The core applies seq, authority and the estop and fault latches exactly as for /control, then hands

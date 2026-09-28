@@ -19,3 +19,8 @@ __attribute__((weak)) bool profile_object_stream_data(const uint8_t *data, size_
 __attribute__((weak)) void profile_object_stream_end(bool complete)
 {
 }
+
+// A profile whose programme keeps running under a master need not define this (§11.3)
+__attribute__((weak)) void profile_resume(void)
+{
+}

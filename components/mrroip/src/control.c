@@ -75,8 +75,13 @@ static void master_lost(const char *why)
 {
     const profile_info_t *info = profile_info();
     authority_t next = rest_authority();
-    if (strcmp(info->device_class, "passive") != 0 && next != AUTH_AUTONOMOUS) {
+    if (next == AUTH_AUTONOMOUS) {
+        profile_resume();           // stationary with a programme: resume it
+    } else if (strcmp(info->device_class, "passive") != 0) {
         profile_come_to_rest();     // mobile stops; stationary without a programme comes to rest
+        if (!estop_latched) {       // a latched stop stays visible as the mode
+            strlcpy(mode, info->rest_mode ? info->rest_mode : "", sizeof(mode));
+        }
     }                               // passive holds its last state; autonomous motion is never subject to it
     char ip[16];
     ip_text(authority_ip, ip, sizeof(ip));
@@ -101,7 +106,7 @@ void control_start(void)
 {
     lock = xSemaphoreCreateMutex();
     authority = rest_authority();
-    strlcpy(mode, profile_info()->rest_mode, sizeof(mode));
+    strlcpy(mode, profile_info()->rest_mode ? profile_info()->rest_mode : "", sizeof(mode));
     xTaskCreate(timeout_task, "control", 3 * 1024, NULL, 4, NULL);
 }
 
@@ -335,7 +340,7 @@ int control_apply(const char *json, size_t len, uint32_t source_ip, char *out, s
                 ESP_LOGW(TAG, "ESTOP cleared by reset");
             }
             estop_latched = false;
-            strlcpy(mode, info->rest_mode, sizeof(mode));
+            strlcpy(mode, info->rest_mode ? info->rest_mode : "", sizeof(mode));
         } else if (changes_state) {
             profile_apply(requested, count, ids, values);   // desired state: repeating it changes nothing
             strlcpy(mode, requested, sizeof(mode));
